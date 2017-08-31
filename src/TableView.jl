@@ -3,7 +3,7 @@ module TableView
 using WebIO
 using IndexedTables
 
-function showtable(t; rows=1:100)
+function showtable(t; rows=1:100, kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
@@ -27,9 +27,12 @@ function showtable(t; rows=1:100)
         :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
         :manualColumnResize => true,
         :manualRowResize => true,
-        :width =>800,
-        :height =>400
+        :width => 800,
+        :height => 400,
     )
+
+    merge!(options, Dict(kwargs))
+
     handler = @js function (Handsontable)
         @var sizefix = document.createElement("style");
         sizefix.textContent = """
