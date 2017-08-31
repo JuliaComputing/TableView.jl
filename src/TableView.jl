@@ -8,7 +8,15 @@ function showtable(t; rows=1:100)
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
 
-    subt = IndexedTable(keys(t)[rows], values(t)[rows])
+    ks = keys(t)[rows]
+    vs = values(t)[rows]
+
+    if !isa(keys(t), Columns)
+         ks = collect(ks)
+         vs = collect(vs)
+    end
+
+    subt = IndexedTable(ks, vs)
 
     headers = [fieldnames(eltype(keys(t))); fieldnames(eltype(t));]
     options = Dict(
