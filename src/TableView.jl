@@ -3,18 +3,18 @@ module TableView
 using WebIO
 using IndexedTables
 
-function showtable(t; rows=1:100, kwargs...)
+function showtable(t::DTable; rows=1:100, kwargs...)
+    showtable(collect(JuliaDB.subtable(t, rows)); rows=rows, kwargs...)
+end
+
+function showtable(t::IndexedTable; rows=1:100, kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
+    pop!(data, :rows)
 
     ks = keys(t)[rows]
     vs = values(t)[rows]
-
-    if !isa(keys(t), Columns)
-         ks = collect(ks)
-         vs = collect(vs)
-    end
 
     subt = IndexedTable(ks, vs)
 
