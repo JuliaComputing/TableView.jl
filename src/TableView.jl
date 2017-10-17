@@ -3,7 +3,7 @@ module TableView
 using WebIO
 using IndexedTables
 
-function showtable(t::IndexedTable; rows=1:100, colopts=Dict(), kwargs...)
+function showtable(t; rows=1:100, colopts=Dict(), kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
