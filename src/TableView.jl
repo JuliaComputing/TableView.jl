@@ -3,7 +3,7 @@ module TableView
 using WebIO
 using IndexedTables
 
-function showtable(t; rows=1:100, kwargs...)
+function showtable(t::IndexedTable; rows=1:100, colopts=Dict(), kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
@@ -18,6 +18,8 @@ function showtable(t; rows=1:100, kwargs...)
 
     subt = IndexedTable(ks, vs)
 
+    columns = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in vcat(fieldnames(eltype(ks)), fieldnames(eltype(t)))]
+
     headers = [fieldnames(eltype(keys(t))); fieldnames(eltype(t));]
     options = Dict(
         :data => IndexedTables.rows(subt),
@@ -27,6 +29,7 @@ function showtable(t; rows=1:100, kwargs...)
         :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
         :manualColumnResize => true,
         :manualRowResize => true,
+        :columns => columns,
         :width => 800,
         :height => 400,
     )
