@@ -18,9 +18,9 @@ function showtable(t; rows=1:100, colopts=Dict(), kwargs...)
 
     subt = IndexedTable(ks, vs)
 
-    columns = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in vcat(fieldnames(eltype(ks)), fieldnames(eltype(t)))]
+    headers = [fieldnames(eltype(ks)); fieldnames(eltype(t));]
+    cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in fieldnames(columns(subt))]
 
-    headers = [fieldnames(eltype(keys(t))); fieldnames(eltype(t));]
     options = Dict(
         :data => IndexedTables.rows(subt),
         :colHeaders => headers,
@@ -29,7 +29,7 @@ function showtable(t; rows=1:100, colopts=Dict(), kwargs...)
         :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
         :manualColumnResize => true,
         :manualRowResize => true,
-        :columns => columns,
+        :columns => cols,
         :width => 800,
         :height => 400,
     )
