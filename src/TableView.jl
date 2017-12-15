@@ -1,9 +1,11 @@
 module TableView
 
 using WebIO
-using IndexedTables
+using JuliaDB
 
-function showtable(t; rows=1:100, colopts=Dict(), kwargs...)
+import JuliaDB: DNDSparse
+
+function showtable(t::Union{DNDSparse, NDSparse}; rows=1:100, colopts=Dict(), kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
@@ -16,13 +18,13 @@ function showtable(t; rows=1:100, colopts=Dict(), kwargs...)
          vs = collect(vs)
     end
 
-    subt = IndexedTable(ks, vs)
+    subt = NDSparse(ks, vs)
 
-    headers = [fieldnames(eltype(ks)); fieldnames(eltype(t));]
-    cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in fieldnames(columns(subt))]
+    headers = colnames(subt)
+    cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in headers]
 
     options = Dict(
-        :data => IndexedTables.rows(subt),
+        :data => JuliaDB.rows(subt),
         :colHeaders => headers,
         :fixedColumnsLeft => ndims(t),
         :modifyColWidth => @js(w -> w > 300 ? 300 : w),
