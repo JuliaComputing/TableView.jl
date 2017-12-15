@@ -5,6 +5,10 @@ using JuliaDB
 
 import JuliaDB: DNDSparse, DNextTable, NextTable
 
+function JuliaDB.subtable(t::DNextTable, r)
+    table(collect(rows(t)[r]), pkey=t.pkey)
+end
+
 function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
