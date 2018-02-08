@@ -2,6 +2,7 @@ module TableView
 
 using WebIO
 using JuliaDB
+using DataValues
 
 import JuliaDB: DNDSparse, DNextTable, NextTable
 
@@ -9,18 +10,30 @@ function JuliaDB.subtable(t::DNextTable, r)
     table(collect(rows(t)[r]), pkey=t.pkey)
 end
 
+showna(xs) = xs
+function showna(xs::DataValueArray)
+    map(xs) do x
+        isnull(x) ? "NA" : get(x)
+    end
+end
+
+function showna(xs::Columns)
+    rows(map(showna, columns(xs)))
+end
+
 function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
 
-    subt = JuliaDB.subtable(t, rows)
+    trunc_rows = max(1, first(rows)):min(length(t), last(rows))
+    subt = JuliaDB.subtable(t, trunc_rows)
 
     headers = colnames(subt)
     cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in headers]
 
     options = Dict(
-        :data => collect(JuliaDB.rows(subt)),
+        :data => showna(collect(JuliaDB.rows(subt))),
         :colHeaders => headers,
         :modifyColWidth => @js(w -> w > 300 ? 300 : w),
         :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
@@ -49,20 +62,23 @@ function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), 
     ondependencies(w, handler)
     w()
 end
+
 function showtable(t::Union{DNDSparse, NDSparse}; rows=1:100, colopts=Dict(), kwargs...)
     w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                              "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
 
-    ks = keys(t)[rows]
-    vs = values(t)[rows]
+    trunc_rows = max(1, first(rows)):min(length(t), last(rows))
+
+    ks = keys(t)[trunc_rows]
+    vs = values(t)[trunc_rows]
 
     if !isa(keys(t), Columns)
          ks = collect(ks)
          vs = collect(vs)
     end
 
-    subt = NDSparse(ks, vs)
+    subt = NDSparse(showna(ks), showna(vs))
 
     headers = colnames(subt)
     cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in headers]
