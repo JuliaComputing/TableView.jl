@@ -1,6 +1,7 @@
 module TableView
 
 using WebIO
+using JSExpr
 using JuliaDB
 using DataValues
 
@@ -22,9 +23,8 @@ function showna(xs::Columns)
 end
 
 function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), kwargs...)
-    w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
-                             "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
-    data = Observable{Any}(w, "data", [])
+    w = Scope(imports=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
+                       "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
 
     trunc_rows = max(1, first(rows)):min(length(t), last(rows))
     subt = JuliaDB.subtable(t, trunc_rows)
@@ -59,13 +59,14 @@ function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), 
         this.dom.appendChild(sizefix)
         this.hot = @new Handsontable(this.dom, $options);
     end
-    ondependencies(w, handler)
-    w()
+    onimport(w, handler)
+    w.dom = dom"div"()
+    w
 end
 
 function showtable(t::Union{DNDSparse, NDSparse}; rows=1:100, colopts=Dict(), kwargs...)
-    w = Widget(dependencies=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
-                             "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
+    w = Scope(imports=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
+                       "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
     data = Observable{Any}(w, "data", [])
 
     trunc_rows = max(1, first(rows)):min(length(t), last(rows))
@@ -108,8 +109,9 @@ function showtable(t::Union{DNDSparse, NDSparse}; rows=1:100, colopts=Dict(), kw
         this.dom.appendChild(sizefix)
         this.hot = @new Handsontable(this.dom, $options);
     end
-    ondependencies(w, handler)
-    w()
+    onimport(w, handler)
+    w.dom = dom"div"()
+    w
 end
 
 end # module
