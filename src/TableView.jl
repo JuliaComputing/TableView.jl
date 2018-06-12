@@ -114,4 +114,6 @@ function showtable(t::Union{DNDSparse, NDSparse}; rows=1:100, colopts=Dict(), kw
     w
 end
 
+showtable(t; kwargs...) = showtable(table(t); kwargs...)
+
 end # module
