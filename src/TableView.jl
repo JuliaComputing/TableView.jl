@@ -12,7 +12,7 @@ function JuliaDB.subtable(t::DNextTable, r)
 end
 
 showna(xs) = xs
-function showna(xs::DataValueArray)
+function showna(xs::AbstractArray{T}) where {T<:DataValue}
     map(xs) do x
         isnull(x) ? "NA" : get(x)
     end
