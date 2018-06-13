@@ -22,7 +22,7 @@ function showna(xs::Columns)
     rows(map(showna, columns(xs)))
 end
 
-function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), kwargs...)
+function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), height=nothing, kwargs...)
     w = Scope(imports=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
                        "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
 
@@ -39,9 +39,8 @@ function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), 
         :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
         :manualColumnResize => true,
         :manualRowResize => true,
+        :height => height === nothing ? length(subt) * 24 + 45 : height,
         :columns => cols,
-        :width => 800,
-        :height => 400,
     )
     if (length(t.pkey) > 0 && t.pkey == [1:length(t.pkey);])
         options[:fixedColumnsLeft] = length(t.pkey)
