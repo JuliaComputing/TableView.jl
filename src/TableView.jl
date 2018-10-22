@@ -4,9 +4,10 @@ using WebIO, JSExpr, JSON, Dates
 using Observables: @map
 
 function showtable(x; dark = false)
+    iit = TableTraits.isiterabletable(x)
     if Tables.istable(typeof(x))
         return _showtable(x, dark)
-    elseif TableTraits.isiterabletable(x)
+    elseif ismissing(iit) || iit
         it = IteratorInterfaceExtensions.getiterator(x)
         return _showtable(Tables.DataValueUnwrapper(it), dark)
     end
@@ -14,29 +15,45 @@ function showtable(x; dark = false)
 end
 
 function _showtable(table, dark)
-    length(Tables.rows(table)) > 10_000 ? _showtable_async(table, dark) :
-                                          _showtable_sync(table, dark)
-end
+    tablelength = Base.IteratorSize(table) == Base.HasLength() ? length(Tables.rows(table)) : nothing
 
-function _showtable_sync(table, dark)
-    schema = Tables.schema(table)
-    names = schema.names
-    types = schema.types
     rows = Tables.rows(table)
-
+    schema = Tables.schema(table)
+    if schema === nothing
+        names = []
+        types = []
+        for (i, c) in enumerate(Tables.eachcolumn(first(rows)))
+            push!(names, string(i))
+            push!(types, typeof(c))
+        end
+    else
+        names = schema.names
+        types = schema.types
+    end
     w = Scope(imports=["https://unpkg.com/ag-grid-community/dist/ag-grid-community.min.noStyle.js",
                        "https://unpkg.com/ag-grid-community/dist/styles/ag-grid.css",
                        "https://unpkg.com/ag-grid-community/dist/styles/ag-theme-balham$(dark ? "-dark" : "").css",])
 
     coldefs = [(
-                    headerName = n,
-                    headerTooltip = types[i],
-                    field = n,
-                    type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
-                    filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                             types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
+                headerName = n,
+                headerTooltip = types[i],
+                field = n,
+                type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
+                filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
                ) for (i, n) in enumerate(names)]
 
+    tablelength === nothing || tablelength > 10_000 ? _showtable_async!(w, names, types, rows, coldefs, tablelength, dark) :
+                                                      _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
+
+    w.dom = dom"div#grid"(className = "ag-theme-balham$(dark ? "-dark" : "")",
+                          style = Dict("width" => "100%",
+                                     "min-width" => "400px",
+                                     "height" => "800px"))
+    w
+end
+
+function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
     options = Dict(
         :rowData => table2json(rows, names, types),
         :columnDefs => coldefs,
@@ -47,39 +64,16 @@ function _showtable_sync(table, dark)
     )
 
     handler = @js function (agGrid)
-        gridOptions = $options
+        @var gridOptions = $options
         gridOptions.rowData = JSON.parse(gridOptions.rowData)
         this.table = @new agGrid.Grid(this.dom.querySelector("#grid"), gridOptions)
         gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
-    w.dom = dom"div#grid"(className = "ag-theme-balham$(dark ? "-dark" : "")",
-                          style=Dict(:width => "100%",
-                                     "min-width" => "400px",
-                                     :height => "800px"))
-    w
 end
 
 
-function _showtable_async(table, dark)
-    schema = Tables.schema(table)
-    names = schema.names
-    types = schema.types
-    rows = Tables.rows(table)
-
-    w = Scope(imports=["https://unpkg.com/ag-grid-community/dist/ag-grid-community.min.noStyle.js",
-                       "https://unpkg.com/ag-grid-community/dist/styles/ag-grid.css",
-                       "https://unpkg.com/ag-grid-community/dist/styles/ag-theme-balham$(dark ? "-dark" : "").css",])
-
-    coldefs = [(
-                    headerName = n,
-                    headerTooltip = types[i],
-                    field = n,
-                    type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
-                    filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                             types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
-               ) for (i, n) in enumerate(names)]
-
+function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
@@ -89,7 +83,7 @@ function _showtable_async(table, dark)
     end
 
     onjs(requestedrows, @js function (val)
-        ($rowparams[]).successCallback(JSON.parse(val), $(length(rows)))
+        ($rowparams[]).successCallback(JSON.parse(val), $(tablelength))
     end)
 
     options = Dict(
@@ -108,22 +102,16 @@ function _showtable_async(table, dark)
                     $rowparams[] = rowParams
                 end
             ,
-            "rowCount" => length(rows)
+            "rowCount" => tablelength
         )
     )
 
     handler = @js function (agGrid)
-        gridOptions = $options
-        # gridOptions.rowData = JSON.parse(gridOptions.rowData)
+        @var gridOptions = $options
         this.table = @new agGrid.Grid(this.dom.querySelector("#grid"), gridOptions)
         gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
-    w.dom = dom"div#grid"(className = "ag-theme-balham$(dark ? "-dark" : "")",
-                          style=Dict(:width => "100%",
-                                     "min-width" => "400px",
-                                     :height => "800px"))
-    w
 end
 
 # directly write JSON instead of allocating temporary dicts etc
