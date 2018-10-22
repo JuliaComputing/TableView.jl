@@ -80,28 +80,35 @@ function _showtable_async(table, dark)
                              types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
                ) for (i, n) in enumerate(names)]
 
-    rowinds = Observable(w, "startrow", [1, 100, ""])
-    requestedrows = Observable(w, "requestedrows", "[]")
-    on(rowinds) do x
-        requestedrows[] = table2json(rows, names, types, requested = x[1:2])
+    rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
+                                                "endRow" => 100,
+                                                "successCallback" => @js v -> nothing))
+    requestedrows = Observable(w, "requestedrows", "")
+    on(rowparams) do x
+        requestedrows[] = table2json(rows, names, types, requested = [x["startRow"], x["endRow"]])
     end
 
     onjs(requestedrows, @js function (val)
-        $rowinds[][2](JSON.parse(val))
+        ($rowparams[]).successCallback(JSON.parse(val), $(length(rows)))
     end)
 
     options = Dict(
         :columnDefs => coldefs,
-        # :enableSorting => true,
-        # :enableFilter => true,
+        :enableSorting => true,
+        :enableFilter => true,
+        :maxConcurrentDatasourceRequests => 1,
+        :cacheBlockSize => 1000,
+        :maxBlocksInCache => 100,
         :enableColResize => true,
         :multiSortKey => "ctrl",
         :rowModelType => "infinite",
         :datasource => Dict(
             "getRows" =>
                 @js function (rowParams)
-                    $rowinds[] = [rowParams.startRow, rowParams.endRow, rowParams.successCallback]
+                    $rowparams[] = rowParams
                 end
+            ,
+            "rowCount" => length(rows)
         )
     )
 
