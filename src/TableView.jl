@@ -20,12 +20,11 @@ function _showtable(table, dark)
     rows = Tables.rows(table)
     schema = Tables.schema(table)
     if schema === nothing
-        names = []
         types = []
         for (i, c) in enumerate(Tables.eachcolumn(first(rows)))
-            push!(names, string(i))
             push!(types, typeof(c))
         end
+        names = collect(propertynames(first(rows)))
     else
         names = schema.names
         types = schema.types
