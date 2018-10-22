@@ -3,3 +3,5 @@ WebIO
 JSExpr
 Tables
 JSON
+TableTraits
+IteratorInterfaceExtensions
