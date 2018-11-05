@@ -2,6 +2,18 @@ module TableView
 using Tables, TableTraits, IteratorInterfaceExtensions
 using WebIO, JSExpr, JSON, Dates
 using Observables: @map
+using AssetRegistry
+
+const ag_grid_imports = []
+
+function __init__()
+    empty!(ag_grid_imports)
+    for f in ["ag-grid.js", "ag-grid.css", "ag-grid-light.css", "ag-grid-dark.css"]
+        path = normpath(joinpath(@__DIR__, "..", "deps", "ag-grid", f))
+        AssetRegistry.register(path)
+        push!(ag_grid_imports, path)
+    end
+end
 
 function showtable(x; dark = false)
     iit = TableTraits.isiterabletable(x)
@@ -29,9 +41,7 @@ function _showtable(table, dark)
         names = schema.names
         types = schema.types
     end
-    w = Scope(imports=["https://unpkg.com/ag-grid-community/dist/ag-grid-community.min.noStyle.js",
-                       "https://unpkg.com/ag-grid-community/dist/styles/ag-grid.css",
-                       "https://unpkg.com/ag-grid-community/dist/styles/ag-theme-balham$(dark ? "-dark" : "").css",])
+    w = Scope(imports=ag_grid_imports)
 
     coldefs = [(
                 headerName = n,
@@ -47,8 +57,8 @@ function _showtable(table, dark)
 
     w.dom = dom"div#grid"(className = "ag-theme-balham$(dark ? "-dark" : "")",
                           style = Dict("width" => "100%",
-                                     "min-width" => "400px",
-                                     "height" => "800px"))
+                                       "min-width" => "400px",
+                                       "height" => "800px"))
     w
 end
 
