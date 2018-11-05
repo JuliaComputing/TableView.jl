@@ -2,16 +2,13 @@ module TableView
 using Tables, TableTraits, IteratorInterfaceExtensions
 using WebIO, JSExpr, JSON, Dates
 using Observables: @map
-using AssetRegistry
 
 const ag_grid_imports = []
 
 function __init__()
     empty!(ag_grid_imports)
     for f in ["ag-grid.js", "ag-grid.css", "ag-grid-light.css", "ag-grid-dark.css"]
-        path = normpath(joinpath(@__DIR__, "..", "deps", "ag-grid", f))
-        AssetRegistry.register(path)
-        push!(ag_grid_imports, path)
+        push!(ag_grid_imports, normpath(joinpath(@__DIR__, "..", "deps", "ag-grid", f)))
     end
 end
 
@@ -41,7 +38,7 @@ function _showtable(table, dark)
         names = schema.names
         types = schema.types
     end
-    w = Scope(imports=ag_grid_imports)
+    w = Scope(imports = ag_grid_imports)
 
     coldefs = [(
                 headerName = n,
