@@ -54,14 +54,14 @@ function _showtable(table, dark)
 
     w.dom = dom"div#grid"(className = "ag-theme-balham$(dark ? "-dark" : "")",
                           style = Dict("width" => "100%",
-                                       "min-width" => "400px",
-                                       "height" => "800px"))
+                                       "height" => "100%",
+                                       "min-height" => "200px"))
     w
 end
 
 function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
     options = Dict(
-        :rowData => table2json(rows, names, types),
+        :rowData => JSONText(table2json(rows, names, types)),
         :columnDefs => coldefs,
         :enableSorting => true,
         :enableFilter => true,
@@ -71,7 +71,6 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
 
     handler = @js function (agGrid)
         @var gridOptions = $options
-        gridOptions.rowData = JSON.parse(gridOptions.rowData)
         this.table = @new agGrid.Grid(this.dom.querySelector("#grid"), gridOptions)
         gridOptions.columnApi.autoSizeColumns($names)
     end
@@ -83,13 +82,13 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
-    requestedrows = Observable(w, "requestedrows", "")
+    requestedrows = Observable(w, "requestedrows", JSONText("{}"))
     on(rowparams) do x
-        requestedrows[] = table2json(rows, names, types, requested = [x["startRow"], x["endRow"]])
+        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"], x["endRow"]]))
     end
 
     onjs(requestedrows, @js function (val)
-        ($rowparams[]).successCallback(JSON.parse(val), $(tablelength))
+        ($rowparams[]).successCallback(val, $(tablelength))
     end)
 
     options = Dict(
