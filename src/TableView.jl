@@ -1,6 +1,7 @@
 module TableView
-using Tables, TableTraits, IteratorInterfaceExtensions
-using WebIO, JSExpr, JSON, Dates
+
+using Tables
+using WebIO, JSExpr, JSON, Dates, UUIDs
 using Observables: @map
 
 const ag_grid_imports = []
@@ -12,18 +13,11 @@ function __init__()
     end
 end
 
-function showtable(x; dark = false)
-    iit = TableTraits.isiterabletable(x)
-    if Tables.istable(typeof(x))
-        return _showtable(x, dark)
-    elseif ismissing(iit) || iit
-        it = IteratorInterfaceExtensions.getiterator(x)
-        return _showtable(Tables.DataValueUnwrapper(it), dark)
+function showtable(table; dark = false, height = 500)
+    if !Tables.istable(typeof(table))
+        throw(ArgumentError("Argument is not a table."))
     end
-    throw(ArgumentError("Argument is not a table."))
-end
 
-function _showtable(table, dark)
     tablelength = Base.IteratorSize(table) == Base.HasLength() ? length(Tables.rows(table)) : nothing
 
     rows = Tables.rows(table)
@@ -49,17 +43,19 @@ function _showtable(table, dark)
                          types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
                ) for (i, n) in enumerate(names)]
 
-    tablelength === nothing || tablelength > 10_000 ? _showtable_async!(w, names, types, rows, coldefs, tablelength, dark) :
-                                                      _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
+    id = string("grid-", string(uuid1())[1:8])
+    w.dom = dom"div"(className = "ag-theme-balham$(dark ? "-dark" : "")",
+                     style = Dict("width" => "100%",
+                                  "height" => "$(height)px"),
+                     id = id)
 
-    w.dom = dom"div#grid"(className = "ag-theme-balham$(dark ? "-dark" : "")",
-                          style = Dict("width" => "100%",
-                                       "height" => "100%",
-                                       "min-height" => "200px"))
+    tablelength === nothing || tablelength > 10_000 ? _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id) :
+                                                      _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
+
     w
 end
 
-function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
+function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
     options = Dict(
         :rowData => JSONText(table2json(rows, names, types)),
         :columnDefs => coldefs,
@@ -71,14 +67,15 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark)
 
     handler = @js function (agGrid)
         @var gridOptions = $options
-        this.table = @new agGrid.Grid(this.dom.querySelector("#grid"), gridOptions)
+        @var el = document.getElementById($id)
+        this.table = @new agGrid.Grid(el, gridOptions)
         gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
 end
 
 
-function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark)
+function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
@@ -113,7 +110,8 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark)
 
     handler = @js function (agGrid)
         @var gridOptions = $options
-        this.table = @new agGrid.Grid(this.dom.querySelector("#grid"), gridOptions)
+        @var el = document.getElementById($id)
+        this.table = @new agGrid.Grid(el, gridOptions)
         gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
