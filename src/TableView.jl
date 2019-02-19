@@ -15,7 +15,10 @@ function __init__()
     end
 end
 
-function showtable(table; dark = false, height = 500)
+to_css_size(s::AbstractString) = s
+to_css_size(s::Real) = "$(s)px"
+
+function showtable(table; dark = false, height = 500, width = "100%")
     if !Tables.istable(typeof(table))
         throw(ArgumentError("Argument is not a table."))
     end
@@ -47,8 +50,8 @@ function showtable(table; dark = false, height = 500)
 
     id = string("grid-", string(uuid1())[1:8])
     w.dom = dom"div"(className = "ag-theme-balham$(dark ? "-dark" : "")",
-                     style = Dict("width" => "100%",
-                                  "height" => "$(height)px"),
+                     style = Dict("width" => to_css_size(width),
+                                  "height" => to_css_size(height)),
                      id = id)
 
     tablelength === nothing || tablelength > 10_000 ? _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id) :
