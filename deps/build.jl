@@ -1,5 +1,3 @@
-
-
 isdir(joinpath(@__DIR__, "ag-grid")) || mkdir(joinpath(@__DIR__, "ag-grid"))
 
 ag_grid_base = joinpath(@__DIR__, "ag-grid", "ag-grid.js")
