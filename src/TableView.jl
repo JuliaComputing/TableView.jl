@@ -1,119 +1,151 @@
 module TableView
 
-using WebIO
-using JSExpr
-using JuliaDB
-using DataValues
+using Tables
+using WebIO, JSExpr, JSON, Dates, UUIDs
+using Observables: @map
 
-import JuliaDB: DNDSparse, DNextTable, NextTable
+export showtable
 
-function JuliaDB.subtable(t::DNextTable, r)
-    table(collect(rows(t)[r]), pkey=t.pkey)
-end
+const ag_grid_imports = []
 
-showna(xs) = xs
-function showna(xs::AbstractArray{T}) where {T<:DataValue}
-    map(xs) do x
-        isnull(x) ? "NA" : get(x)
+function __init__()
+    empty!(ag_grid_imports)
+    for f in ["ag-grid.js", "ag-grid.css", "ag-grid-light.css", "ag-grid-dark.css"]
+        push!(ag_grid_imports, normpath(joinpath(@__DIR__, "..", "deps", "ag-grid", f)))
     end
 end
 
-function showna(xs::Columns)
-    rows(map(showna, columns(xs)))
-end
-
-function showtable(t::Union{DNextTable, NextTable}; rows=1:100, colopts=Dict(), kwargs...)
-    w = Scope(imports=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
-                       "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
-
-    trunc_rows = max(1, first(rows)):min(length(t), last(rows))
-    subt = JuliaDB.subtable(t, trunc_rows)
-
-    headers = colnames(subt)
-    cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in headers]
-
-    options = Dict(
-        :data => showna(collect(JuliaDB.rows(subt))),
-        :colHeaders => headers,
-        :modifyColWidth => @js(w -> w > 300 ? 300 : w),
-        :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
-        :manualColumnResize => true,
-        :manualRowResize => true,
-        :columns => cols,
-        :width => 800,
-        :height => 400,
-    )
-    if (length(t.pkey) > 0 && t.pkey == [1:length(t.pkey);])
-        options[:fixedColumnsLeft] = length(t.pkey)
+function showtable(table; dark = false, height = 500)
+    if !Tables.istable(typeof(table))
+        throw(ArgumentError("Argument is not a table."))
     end
 
-    merge!(options, Dict(kwargs))
+    tablelength = Base.IteratorSize(table) == Base.HasLength() ? length(Tables.rows(table)) : nothing
 
-    handler = @js function (Handsontable)
-        @var sizefix = document.createElement("style");
-        sizefix.textContent = """
-            .htCore td {
-                white-space:nowrap
-            }
-        """
-        this.dom.appendChild(sizefix)
-        this.hot = @new Handsontable(this.dom, $options);
+    rows = Tables.rows(table)
+    schema = Tables.schema(table)
+    if schema === nothing
+        types = []
+        for (i, c) in enumerate(Tables.eachcolumn(first(rows)))
+            push!(types, typeof(c))
+        end
+        names = collect(propertynames(first(rows)))
+    else
+        names = schema.names
+        types = schema.types
     end
-    onimport(w, handler)
-    w.dom = dom"div"()
+    w = Scope(imports = ag_grid_imports)
+
+    coldefs = [(
+                headerName = n,
+                headerTooltip = types[i],
+                field = n,
+                type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
+                filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
+               ) for (i, n) in enumerate(names)]
+
+    id = string("grid-", string(uuid1())[1:8])
+    w.dom = dom"div"(className = "ag-theme-balham$(dark ? "-dark" : "")",
+                     style = Dict("width" => "100%",
+                                  "height" => "$(height)px"),
+                     id = id)
+
+    tablelength === nothing || tablelength > 10_000 ? _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id) :
+                                                      _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
+
     w
 end
 
-function showtable(t::Union{DNDSparse, NDSparse}; rows=1:100, colopts=Dict(), kwargs...)
-    w = Scope(imports=["https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.js",
-                       "https://cdnjs.cloudflare.com/ajax/libs/handsontable/0.34.0/handsontable.full.css"])
-    data = Observable{Any}(w, "data", [])
-
-    trunc_rows = max(1, first(rows)):min(length(t), last(rows))
-
-    ks = keys(t)[trunc_rows]
-    vs = values(t)[trunc_rows]
-
-    if !isa(keys(t), Columns)
-         ks = collect(ks)
-         vs = collect(vs)
-    end
-
-    subt = NDSparse(showna(ks), showna(vs))
-
-    headers = colnames(subt)
-    cols = [merge(Dict(:data=>n), get(colopts, n, Dict())) for n in headers]
-
+function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
     options = Dict(
-        :data => JuliaDB.rows(subt),
-        :colHeaders => headers,
-        :fixedColumnsLeft => ndims(t),
-        :modifyColWidth => @js(w -> w > 300 ? 300 : w),
-        :modifyRowHeight => @js(h -> h > 60 ? 50 : h),
-        :manualColumnResize => true,
-        :manualRowResize => true,
-        :columns => cols,
-        :width => 800,
-        :height => 400,
+        :rowData => JSONText(table2json(rows, names, types)),
+        :columnDefs => coldefs,
+        :enableSorting => true,
+        :enableFilter => true,
+        :enableColResize => true,
+        :multiSortKey => "ctrl",
     )
 
-    merge!(options, Dict(kwargs))
-
-    handler = @js function (Handsontable)
-        @var sizefix = document.createElement("style");
-        sizefix.textContent = """
-            .htCore td {
-                white-space:nowrap
-            }
-        """
-        this.dom.appendChild(sizefix)
-        this.hot = @new Handsontable(this.dom, $options);
+    handler = @js function (agGrid)
+        @var gridOptions = $options
+        @var el = document.getElementById($id)
+        this.table = @new agGrid.Grid(el, gridOptions)
+        gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
-    w.dom = dom"div"()
-    w
 end
 
-showtable(t; kwargs...) = showtable(table(t); kwargs...)
 
-end # module
+function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id)
+    rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
+                                                "endRow" => 100,
+                                                "successCallback" => @js v -> nothing))
+    requestedrows = Observable(w, "requestedrows", JSONText("{}"))
+    on(rowparams) do x
+        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"], x["endRow"]]))
+    end
+
+    onjs(requestedrows, @js function (val)
+        ($rowparams[]).successCallback(val, $(tablelength))
+    end)
+
+    options = Dict(
+        :columnDefs => coldefs,
+        :enableSorting => true,
+        :enableFilter => true,
+        :maxConcurrentDatasourceRequests => 1,
+        :cacheBlockSize => 1000,
+        :maxBlocksInCache => 100,
+        :enableColResize => true,
+        :multiSortKey => "ctrl",
+        :rowModelType => "infinite",
+        :datasource => Dict(
+            "getRows" =>
+                @js function (rowParams)
+                    $rowparams[] = rowParams
+                end
+            ,
+            "rowCount" => tablelength
+        )
+    )
+
+    handler = @js function (agGrid)
+        @var gridOptions = $options
+        @var el = document.getElementById($id)
+        this.table = @new agGrid.Grid(el, gridOptions)
+        gridOptions.columnApi.autoSizeColumns($names)
+    end
+    onimport(w, handler)
+end
+
+# directly write JSON instead of allocating temporary dicts etc
+function table2json(rows, names, types; requested = nothing)
+    io = IOBuffer()
+    print(io, '[')
+    for (i, row) in enumerate(rows)
+        if requested == nothing || first(requested) <= i <= last(requested)
+            print(io, '{')
+            i = 1
+            for col in Tables.eachcolumn(row)
+                JSON.print(io, names[i])
+                i += 1
+                print(io, ':')
+                if col isa Number
+                    JSON.print(io, col)
+                else
+                    JSON.print(io, sprint(print, col))
+                end
+                print(io, ',')
+            end
+            skip(io, -1)
+            print(io, '}')
+            print(io, ',')
+        end
+    end
+    skip(io, -1)
+    print(io, ']')
+
+    String(take!(io))
+end
+end
