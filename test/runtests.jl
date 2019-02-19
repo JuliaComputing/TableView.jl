@@ -1,5 +1,10 @@
 using TableView
-using Base.Test
+using Test, WebIO
 
-# write your own tests here
-@test 1 == 2
+@test isfile(joinpath(@__DIR__, "..", "deps", "ag-grid", "ag-grid.js"))
+
+nttable = [
+    (a = 2.0, b = 3),
+    (a = 3.0, b = 12)
+]
+@test showtable(nttable) isa WebIO.Scope

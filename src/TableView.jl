@@ -4,6 +4,8 @@ using Tables
 using WebIO, JSExpr, JSON, Dates, UUIDs
 using Observables: @map
 
+export showtable
+
 const ag_grid_imports = []
 
 function __init__()
