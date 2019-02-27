@@ -103,8 +103,10 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
 
     options = Dict(
         :columnDefs => coldefs,
-        :enableSorting => true,
-        :enableFilter => true,
+        # can't sort or filter asynchronously loaded data without backend support,
+        # which we don't have yet
+        :enableSorting => false,
+        :enableFilter => false,
         :maxConcurrentDatasourceRequests => 1,
         :cacheBlockSize => 1000,
         :maxBlocksInCache => 100,
