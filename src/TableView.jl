@@ -18,12 +18,20 @@ end
 to_css_size(s::AbstractString) = s
 to_css_size(s::Real) = "$(s)px"
 
-function showtable(table; dark = false, height = 500, width = "100%")
+function showtable(table; dark = false, height = :auto, width = "100%")
     if !Tables.istable(typeof(table))
         throw(ArgumentError("Argument is not a table."))
     end
 
     tablelength = Base.IteratorSize(table) == Base.HasLength() ? length(Tables.rows(table)) : nothing
+
+    if height === :auto
+        height = 500
+        if tablelength !== nothing
+            # header + footer height ≈ 40px, 28px per row
+            height = min(40 + tablelength*28, height)
+        end
+    end
 
     rows = Tables.rows(table)
     schema = Tables.schema(table)
