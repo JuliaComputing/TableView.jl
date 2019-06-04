@@ -19,3 +19,7 @@ end
     ]
     @test showtable(nttable) isa WebIO.Scope
 end
+@testset "normal array" begin
+    array = rand(10, 10)
+    @test showtable(array) isa WebIO.Scope
+end
