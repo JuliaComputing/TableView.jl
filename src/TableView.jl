@@ -28,6 +28,10 @@ struct IteratorAndFirst{F, T}
         first = iterate(x)
         return new{typeof(first), typeof(x)}(first, x, len)
     end
+    function IteratorAndFirst(first, x)
+        len = Base.haslength(x) ? length(x) + 1 : 1
+        return new{typeof(first), typeof(x)}(first, x, len)
+    end
 end
 Base.IteratorSize(::Type{IteratorAndFirst{F, T}}) where {F, T} = Base.IteratorSize(T)
 Base.length(x::IteratorAndFirst) = x.len
@@ -38,6 +42,8 @@ function Base.iterate(x::IteratorAndFirst, st)
     st === nothing && return nothing
     return iterate(x.source, st)
 end
+
+showtable(table::AbstractMatrix; kwargs...) = showtable(Tables.table(table); kwargs...)
 
 function showtable(table; dark = false, height = :auto, width = "100%")
     rows = Tables.rows(table)
@@ -171,6 +177,10 @@ function table2json(rows, names, types; requested = nothing)
                 print(io, ':')
                 if col isa Number
                     JSON.print(io, col)
+                elseif col === nothing
+                    JSON.print(io, "nothing")
+                elseif col === missing
+                    JSON.print(io, "missing")
                 else
                     JSON.print(io, sprint(print, col))
                 end
