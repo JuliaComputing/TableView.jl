@@ -22,13 +22,15 @@ to_css_size(s::Real) = "$(s)px"
 struct IteratorAndFirst{F, T}
     first::F
     source::T
+    len::Int
     function IteratorAndFirst(x)
+        len = Base.haslength(x) ? length(x) : 0
         first = iterate(x)
-        return new{typeof(first), typeof(x)}(first, x)
+        return new{typeof(first), typeof(x)}(first, x, len)
     end
 end
 Base.IteratorSize(::Type{IteratorAndFirst{F, T}}) where {F, T} = Base.IteratorSize(T)
-Base.length(x::IteratorAndFirst) = length(x.source)
+Base.length(x::IteratorAndFirst) = x.len
 Base.IteratorEltype(::Type{IteratorAndFirst{F, T}}) where {F, T} = Base.IteratorEltype(T)
 Base.eltype(x::IteratorAndFirst) = eltype(x.source)
 Base.iterate(x::IteratorAndFirst) = x.first
