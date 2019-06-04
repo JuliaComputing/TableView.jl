@@ -22,7 +22,10 @@ to_css_size(s::Real) = "$(s)px"
 struct IteratorAndFirst{F, T}
     first::F
     source::T
-    IteratorAndFirst(x) = new(iterate(x), x)
+    function IteratorAndFirst(x)
+        first = iterate(x)
+        return new{typeof(first), typeof(x)}(first, x)
+    end
 end
 Base.IteratorSize(::Type{IteratorAndFirst{F, T}}) where {F, T} = Base.IteratorSize(T)
 Base.length(x::IteratorAndFirst) = length(x.source)
@@ -31,7 +34,7 @@ Base.eltype(x::IteratorAndFirst) = eltype(x.source)
 Base.iterate(x::IteratorAndFirst) = x.first
 function Base.iterate(x::IteratorAndFirst, st)
     st === nothing && return nothing
-    return iterate(x.source)
+    return iterate(x.source, st)
 end
 
 function showtable(table; dark = false, height = :auto, width = "100%")
