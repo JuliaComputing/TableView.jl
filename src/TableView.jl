@@ -171,6 +171,10 @@ function table2json(rows, names, types; requested = nothing)
                 print(io, ':')
                 if col isa Number
                     JSON.print(io, col)
+                elseif col === nothing
+                    JSON.print(io, "nothing")
+                elseif col === missing
+                    JSON.print(io, "missing")
                 else
                     JSON.print(io, sprint(print, col))
                 end
