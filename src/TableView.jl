@@ -38,7 +38,7 @@ function Base.iterate(x::IteratorAndFirst, st)
 end
 
 function showtable(table; dark = false, height = :auto, width = "100%")
-    rows = Table.rows(table)
+    rows = Tables.rows(table)
     tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
 
     if height === :auto
