@@ -19,12 +19,24 @@ end
 to_css_size(s::AbstractString) = s
 to_css_size(s::Real) = "$(s)px"
 
-function showtable(table; dark = false, height = :auto, width = "100%")
-    if !Tables.istable(typeof(table))
-        throw(ArgumentError("Argument is not a table."))
-    end
+struct IteratorAndFirst{F, T}
+    first::F
+    source::T
+    IteratorAndFirst(x) = new(iterate(x), x)
+end
+Base.IteratorSize(::Type{IteratorAndFirst{F, T}}) where {F, T} = Base.IteratorSize(T)
+Base.length(x::IteratorAndFirst) = length(x.source)
+Base.IteratorEltype(::Type{IteratorAndFirst{F, T}}) where {F, T} = Base.IteratorEltype(T)
+Base.eltype(x::IteratorAndFirst) = eltype(x.source)
+Base.iterate(x::IteratorAndFirst) = x.first
+function Base.iterate(x::IteratorAndFirst, st)
+    st === nothing && return nothing
+    return iterate(x.source)
+end
 
-    tablelength = Base.IteratorSize(table) == Base.HasLength() ? length(Tables.rows(table)) : nothing
+function showtable(table; dark = false, height = :auto, width = "100%")
+    rows = Table.rows(table)
+    tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
 
     if height === :auto
         height = 500
@@ -34,14 +46,21 @@ function showtable(table; dark = false, height = :auto, width = "100%")
         end
     end
 
-    rows = Tables.rows(table)
-    schema = Tables.schema(table)
+    schema = Tables.schema(rows)
     if schema === nothing
+        st = iterate(rows)
+        rows = IteratorAndFirst(st, rows)
+        names = Symbol[]
         types = []
-        for (i, c) in enumerate(Tables.eachcolumn(first(rows)))
-            push!(types, typeof(c))
+        if st !== nothing
+            row = st[1]
+            for nm in propertynames(row)
+                push!(names, nm)
+                push!(types, typeof(getproperty(row, nm)))
+            end
+        else
+            # no schema and no rows
         end
-        names = collect(propertynames(first(rows)))
     else
         names = schema.names
         types = schema.types
