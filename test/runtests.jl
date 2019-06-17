@@ -20,7 +20,7 @@ end
     @test showtable(nttable) isa WebIO.Scope
 end
 @testset "inf and nan serializing" begin
-    rows = Tables.table([NaN Inf -Inf 0 missing nothing])
+    rows = Tables.table([NaN Inf -Inf 0])
     names = [:a, :b, :c, :d, :e, :f]
     types = [Float64 for _ in 1:6]
     json = TableView.table2json(rows, names, types)
@@ -29,8 +29,6 @@ end
     @test firstrow["b"] == "Inf"
     @test firstrow["c"] == "-Inf"
     @test firstrow["d"] == 0
-    @test firstrow["e"] == "missing"
-    @test firstrow["f"] == "nothing"
 end
 @testset "normal array" begin
     array = rand(10, 10)
