@@ -175,7 +175,7 @@ function table2json(rows, names, types; requested = nothing)
                 JSON.print(io, names[i])
                 i += 1
                 print(io, ':')
-                if col isa Number
+                if col isa Number && isfinite(col)
                     JSON.print(io, col)
                 elseif col === nothing
                     JSON.print(io, "nothing")
