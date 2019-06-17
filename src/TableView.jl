@@ -45,7 +45,20 @@ end
 
 showtable(table::AbstractMatrix; kwargs...) = showtable(Tables.table(table); kwargs...)
 
-function showtable(table; dark = false, height = :auto, width = "100%")
+"""
+    showtable(table; dark = false, height = :auto, width = "100%", cell_changed = nothing)
+
+Return a `WebIO.Scope` that displays the provided `table`.
+
+Optional arguments:
+  - `dark`: Switch to a dark theme.
+  - `height`/`width`: CSS attributes specifying the output height and with.
+  - `cell_changed`: Either `nothing` or a function that takes a single argument with the fields
+                    `"new"`, `"old"`, `"row"`, and `"col"`. This function is called whenever the
+                    user edits a table field. Note that all values will be strings, so you need to
+                    do the necessary conversions yourself.
+"""
+function showtable(table; dark = false, height = :auto, width = "100%", cell_changed = nothing)
     rows = Tables.rows(table)
     tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
 
@@ -76,15 +89,43 @@ function showtable(table; dark = false, height = :auto, width = "100%")
         names = schema.names
         types = schema.types
     end
+
+    async = tablelength === nothing || tablelength > 10_000
+
     w = Scope(imports = ag_grid_imports)
+
+    onCellValueChanged = @js function () end
+    if cell_changed != nothing
+        onedit = Observable(w, "onedit", Dict{Any,Any}(
+                                                "row" => 0,
+                                                "col" => 0,
+                                                "old" => 0,
+                                                "new" => 0
+                                              ))
+        on(onedit) do x
+            cell_changed(x)
+        end
+
+        onCellValueChanged = @js function (ev)
+            $onedit[] = Dict(
+                                "row" => ev.rowIndex,
+                                "col" => ev.colDef.headerName,
+                                "old" => ev.oldValue,
+                                "new" => ev.newValue
+                            )
+        end
+    end
 
     coldefs = [(
                 headerName = n,
+                editable = cell_changed !== nothing,
                 headerTooltip = types[i],
                 field = n,
+                sortable = !async,
+                resizable = true,
                 type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
-                filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : nothing
+                filter = async ? false : types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : false
                ) for (i, n) in enumerate(names)]
 
     id = string("grid-", string(uuid1())[1:8])
@@ -93,19 +134,18 @@ function showtable(table; dark = false, height = :auto, width = "100%")
                                   "height" => to_css_size(height)),
                      id = id)
 
-    tablelength === nothing || tablelength > 10_000 ? _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id) :
-                                                      _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
+    showfun = async ? _showtable_async! : _showtable_sync!
+
+    showfun(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
 
     w
 end
 
-function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
+function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
     options = Dict(
+        :onCellValueChanged => onCellValueChanged,
         :rowData => JSONText(table2json(rows, names, types)),
         :columnDefs => coldefs,
-        :enableSorting => true,
-        :enableFilter => true,
-        :enableColResize => true,
         :multiSortKey => "ctrl",
     )
 
@@ -119,7 +159,7 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id)
 end
 
 
-function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id)
+function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
@@ -133,15 +173,11 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
     end)
 
     options = Dict(
+        :onCellValueChanged => onCellValueChanged,
         :columnDefs => coldefs,
-        # can't sort or filter asynchronously loaded data without backend support,
-        # which we don't have yet
-        :enableSorting => false,
-        :enableFilter => false,
         :maxConcurrentDatasourceRequests => 1,
         :cacheBlockSize => 1000,
         :maxBlocksInCache => 100,
-        :enableColResize => true,
         :multiSortKey => "ctrl",
         :rowModelType => "infinite",
         :datasource => Dict(
