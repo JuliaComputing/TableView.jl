@@ -125,7 +125,7 @@ function showtable(table; dark = false, height = :auto, width = "100%", cell_cha
                 resizable = true,
                 type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
                 filter = async ? false : types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : false
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true
                ) for (i, n) in enumerate(names)]
 
     id = string("grid-", string(uuid1())[1:8])
