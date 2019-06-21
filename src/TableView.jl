@@ -278,9 +278,9 @@ function _filterfn(filtermodel)
         return _filterfns[code]
     end
 
-    println("For filterModel: $filtermodel")
-    println("Built code: $code")
-    return _filterfns[code] = eval(Meta.parse(code))
+    fltr = _filterfns[code] = eval(Meta.parse(code))
+    # On the first call, we need to wrap the function to invokelatest
+    return (row) -> Base.invokelatest(fltr, row)
 end
 
 function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
@@ -291,10 +291,7 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
     on(rowparams) do x
         filtermodel = x["filterModel"]
         if length(filtermodel) > 0
-            fltr = _filterfn(filtermodel)
-            data = Base.Iterators.filter(rows) do row
-                Base.invokelatest(fltr, row)
-            end
+            data = Base.Iterators.filter(_filterfn(filtermodel), rows)
         else
             data = rows
         end
