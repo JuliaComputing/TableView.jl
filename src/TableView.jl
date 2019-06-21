@@ -124,8 +124,9 @@ function showtable(table; dark = false, height = :auto, width = "100%", cell_cha
                 sortable = !async,
                 resizable = true,
                 type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
-                filter = async ? false : types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true
+                filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true,
+                filterParams = async ? Dict("applyButton" => true, "clearButton" => true) : nothing
                ) for (i, n) in enumerate(names)]
 
     id = string("grid-", string(uuid1())[1:8])
@@ -158,6 +159,129 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id,
     onimport(w, handler)
 end
 
+const _mapnumberop = Dict{String, String}(
+    "equals" => "==",
+    "notEqual" => "!=",
+    "lessThan" => "<",
+    "lessThanOrEqual" => "<=",
+    "greaterThan" => ">",
+    "greaterThanOrEqual" => ">=",
+    )
+
+const _mapdateop = Dict{String, String}(
+    "equals" => "==",
+    "greaterThan" => ">",
+    "lessThan" => "<",
+    "notEqual" => "!=",
+)
+
+const _dateformat = DateFormat("y-m-d")
+
+function _regex_escape(s::AbstractString)
+    res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:])" => s"\\\1")
+    replace(res, "\0" => "\\0")
+end
+
+function _build_expressions(filtermodel)
+    # Return an array of column expression strings
+
+    function build_number(column, filter)
+        optype = filter["type"]
+        filtervalue = filter["filter"]
+        expression = "true"
+
+        if optype == "inRange"
+            expression = """($filtervalue <= getproperty(row, Symbol("$column")) <= $(filter["filterTo"]))"""
+        else
+            expression = """(getproperty(row, Symbol("$column")) $(_mapnumberop[optype]) $filtervalue)"""
+        end
+
+        return expression
+    end
+
+    function build_text(column, filter)
+        optype = filter["type"]
+
+        # Unfortunately ag-grid's default text filter converts the user's input
+        # to lowercase. Using regex with ignore case option rather normalizing
+        # case on the field value. Thus we need to escape the user's input
+        filtervalue = _regex_escape(filter["filter"])
+
+        expression = "true"
+
+        if optype == "equals"
+            expression = "occursin(r\"\"\"^$filtervalue\$\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+        elseif optype == "notEqual"
+            expression = "!occursin(r\"\"\"^$filtervalue\$\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+        elseif optype == "startsWith"
+            expression = "occursin(r\"\"\"^$filtervalue\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+        elseif optype == "endsWith"
+            expression = "occursin(r\"\"\"$filtervalue\$\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+        elseif optype == "contains"
+            expression = "occursin(r\"\"\"$filtervalue\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+        elseif optype == "notContains"
+            expression = "!occursin(r\"\"\"$filtervalue\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+        end
+
+        return expression
+    end
+
+    function build_date(column, filter)
+        optype = filter["type"]
+        filtervalue = "Date(\"$(filter["dateFrom"])\", _dateformat)"
+        expression = "true"
+
+        if optype == "inRange"
+            filterto = "Date(\"$(filter["dateTo"])\", _dateformat)"
+            expression = """($filtervalue <= getproperty(row, Symbol("$column")) <= $filterto)"""
+        else
+            expression = """(getproperty(row, Symbol("$column")) $(_mapdateop[optype]) $filtervalue)"""
+        end
+
+        return expression
+    end
+
+    function build_filter(column, filter)
+        filtertype = filter["filterType"]
+        expression = "true"
+
+        if filtertype == "number"
+            expression = build_number(column, filter)
+        elseif filtertype == "text"
+            expression = build_text(column, filter)
+        elseif filtertype == "date"
+            expression = build_date(column, filter)
+        end
+
+        return expression
+    end
+
+    function build_boolean(column, conditions)
+        return "(" *
+            build_filter(column, conditions["condition1"]) *
+                (conditions["operator"] == "OR" ? "||" : "&&") *
+            build_filter(column, conditions["condition2"]) *
+            ")"
+    end
+
+    return [
+        (haskey(value, "filterType") ? build_filter(key, value) : build_boolean(key, value))
+        for (key, value) in filtermodel
+    ]
+end
+
+const _filterfns = Dict{String, Any}()
+
+function _filterfn(filtermodel)
+    code = "(row) -> begin $(join(_build_expressions(filtermodel), " && ")) end"
+    if haskey(_filterfns, code)
+        return _filterfns[code]
+    end
+
+    println("For filterModel: $filtermodel")
+    println("Built code: $code")
+    return _filterfns[code] = eval(Meta.parse(code))
+end
 
 function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
@@ -165,7 +289,16 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
                                                 "successCallback" => @js v -> nothing))
     requestedrows = Observable(w, "requestedrows", JSONText("{}"))
     on(rowparams) do x
-        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"], x["endRow"]]))
+        filtermodel = x["filterModel"]
+        if length(filtermodel) > 0
+            fltr = _filterfn(filtermodel)
+            data = Base.Iterators.filter(rows) do row
+                Base.invokelatest(fltr, row)
+            end
+        else
+            data = rows
+        end
+        requestedrows[] = JSONText(table2json(data, names, types, requested = [x["startRow"], x["endRow"]]))
     end
 
     onjs(requestedrows, @js function (val)
