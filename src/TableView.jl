@@ -190,10 +190,16 @@ function _build_expressions(filtermodel)
         filtervalue = filter["filter"]
         expression = "true"
 
-        if optype == "inRange"
-            expression = """($filtervalue <= getproperty(row, Symbol("$column")) <= $(filter["filterTo"]))"""
-        else
-            expression = """(getproperty(row, Symbol("$column")) $(_mapnumberop[optype]) $filtervalue)"""
+        if filtervalue !== nothing
+            if optype == "inRange"
+                filterto = filter["filterTo"]
+                # Only create a range expression if it is fully specified
+                if filterto !== nothing
+                    expression = """($filtervalue <= $column <= $filterto)"""
+                end
+            else
+                expression = """($column $(_mapnumberop[optype]) $filtervalue)"""
+            end
         end
 
         return expression
@@ -210,17 +216,17 @@ function _build_expressions(filtermodel)
         expression = "true"
 
         if optype == "equals"
-            expression = "occursin(r\"\"\"^$filtervalue\$\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+            expression = "occursin(r\"\"\"^$filtervalue\$\"\"\"i, $column)"
         elseif optype == "notEqual"
-            expression = "!occursin(r\"\"\"^$filtervalue\$\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+            expression = "!occursin(r\"\"\"^$filtervalue\$\"\"\"i, $column)"
         elseif optype == "startsWith"
-            expression = "occursin(r\"\"\"^$filtervalue\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+            expression = "occursin(r\"\"\"^$filtervalue\"\"\"i, $column)"
         elseif optype == "endsWith"
-            expression = "occursin(r\"\"\"$filtervalue\$\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+            expression = "occursin(r\"\"\"$filtervalue\$\"\"\"i, $column)"
         elseif optype == "contains"
-            expression = "occursin(r\"\"\"$filtervalue\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+            expression = "occursin(r\"\"\"$filtervalue\"\"\"i, $column)"
         elseif optype == "notContains"
-            expression = "!occursin(r\"\"\"$filtervalue\"\"\"i, getproperty(row, Symbol(\"$column\")))"
+            expression = "!occursin(r\"\"\"$filtervalue\"\"\"i, $column)"
         end
 
         return expression
@@ -228,14 +234,22 @@ function _build_expressions(filtermodel)
 
     function build_date(column, filter)
         optype = filter["type"]
-        filtervalue = "Date(\"$(filter["dateFrom"])\", _dateformat)"
+        filtervalue = filter["dateFrom"]
         expression = "true"
 
-        if optype == "inRange"
-            filterto = "Date(\"$(filter["dateTo"])\", _dateformat)"
-            expression = """($filtervalue <= getproperty(row, Symbol("$column")) <= $filterto)"""
-        else
-            expression = """(getproperty(row, Symbol("$column")) $(_mapdateop[optype]) $filtervalue)"""
+        if filtervalue !== nothing
+            filtervalue = "Date$(Dates.yearmonthday(Date(filtervalue, _dateformat)))"
+
+            if optype == "inRange"
+                filterto = filter["dateTo"]
+                # Only create a range expression if it is fully specified
+                if filterto !== nothing
+                    filterto = "Date$(Dates.yearmonthday(Date(filterto, _dateformat)))"
+                    expression = """($filtervalue <= $column <= $filterto)"""
+                end
+            else
+                expression = """($column $(_mapdateop[optype]) $filtervalue)"""
+            end
         end
 
         return expression
@@ -259,14 +273,21 @@ function _build_expressions(filtermodel)
     function build_boolean(column, conditions)
         return "(" *
             build_filter(column, conditions["condition1"]) *
-                (conditions["operator"] == "OR" ? "||" : "&&") *
+                (conditions["operator"] == "OR" ? " || " : " && ") *
             build_filter(column, conditions["condition2"]) *
             ")"
     end
 
+    function column_access(column)
+        # Sanitize the column access
+        return "getproperty(row, Symbol(raw\"\"\"$column\"\"\"))"
+    end
+
     return [
-        (haskey(value, "filterType") ? build_filter(key, value) : build_boolean(key, value))
-        for (key, value) in filtermodel
+        (haskey(cond, "filterType") ?
+            build_filter(column_access(col), cond) :
+            build_boolean(column_access(col), cond))
+        for (col, cond) in filtermodel
     ]
 end
 
