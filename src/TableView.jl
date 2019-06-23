@@ -178,7 +178,7 @@ const _mapdateop = Dict{String, String}(
 const _dateformat = DateFormat("y-m-d")
 
 function _regex_escape(s::AbstractString)
-    res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:])" => s"\\\1")
+    res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:\"])" => s"\\\1")
     replace(res, "\0" => "\\0")
 end
 
@@ -195,10 +195,10 @@ function _build_expressions(filtermodel)
                 filterto = filter["filterTo"]
                 # Only create a range expression if it is fully specified
                 if filterto !== nothing
-                    expression = """($filtervalue <= $column <= $filterto)"""
+                    expression = "($filtervalue <= $column <= $filterto)"
                 end
             else
-                expression = """($column $(_mapnumberop[optype]) $filtervalue)"""
+                expression = "($column $(_mapnumberop[optype]) $filtervalue)"
             end
         end
 
@@ -206,13 +206,12 @@ function _build_expressions(filtermodel)
     end
 
     function build_text(column, filter)
-        optype = filter["type"]
-
         # Unfortunately ag-grid's default text filter converts the user's input
         # to lowercase. Using regex with ignore case option rather normalizing
         # case on the field value. Thus we need to escape the user's input
         filtervalue = _regex_escape(filter["filter"])
 
+        optype = filter["type"]
         expression = "true"
 
         if optype == "equals"
@@ -279,16 +278,20 @@ function _build_expressions(filtermodel)
     end
 
     function column_access(column)
-        # Sanitize the column access
-        return "getproperty(row, Symbol(raw\"\"\"$column\"\"\"))"
+        # Sanitize the column access. Even though column names
+        # are unlikely to inject code, raw strings do not interpolate.
+        # When using raw string, quote backslashes preceeding quotes first,
+        # then escape the quotes. This then roundtrips through
+        # parse/eval.
+        quoted = replace(replace(column, "\\\"" => "\\\\\""), "\"" => "\\\"")
+        return "getproperty(row, Symbol(raw\"\"\"$quoted\"\"\"))"
     end
 
     return [
-        (haskey(cond, "filterType") ?
+        haskey(cond, "filterType") ?
             build_filter(column_access(col), cond) :
-            build_boolean(column_access(col), cond))
-        for (col, cond) in filtermodel
-    ]
+            build_boolean(column_access(col), cond)
+        for (col, cond) in filtermodel]
 end
 
 const _filterfns = Dict{String, Any}()
@@ -311,11 +314,8 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
     requestedrows = Observable(w, "requestedrows", JSONText("{}"))
     on(rowparams) do x
         filtermodel = x["filterModel"]
-        if length(filtermodel) > 0
-            data = Base.Iterators.filter(_filterfn(filtermodel), rows)
-        else
-            data = rows
-        end
+        data = length(filtermodel) > 0 ?
+            Base.Iterators.filter(_filterfn(filtermodel), rows) : rows
         requestedrows[] = JSONText(table2json(data, names, types, requested = [x["startRow"], x["endRow"]]))
     end
 
