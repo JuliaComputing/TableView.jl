@@ -159,105 +159,106 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id,
     onimport(w, handler)
 end
 
-const _mapnumberop = Dict{String, String}(
-    "equals" => "==",
-    "notEqual" => "!=",
-    "lessThan" => "<",
-    "lessThanOrEqual" => "<=",
-    "greaterThan" => ">",
-    "greaterThanOrEqual" => ">=",
-    )
-
-const _mapdateop = Dict{String, String}(
-    "equals" => "==",
-    "greaterThan" => ">",
-    "lessThan" => "<",
-    "notEqual" => "!=",
-)
-
-const _dateformat = DateFormat("y-m-d")
-
-function _regex_escape(s::AbstractString)
-    res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:\"])" => s"\\\1")
-    replace(res, "\0" => "\\0")
-end
+const OptionalExpr = Union{Missing, Expr}
 
 function _build_expressions(filtermodel)
-    # Return an array of column expression strings
+    # Returns an iterator of Expr
 
-    function build_number(column, filter)
+    mapop = Dict{String, Symbol}(
+        "equals" => :(==),
+        "notEqual" => :(!=),
+        "lessThan" => :(<),
+        "lessThanOrEqual" => :(<=),
+        "greaterThan" => :(>),
+        "greaterThanOrEqual" => :(>=),
+        )
+
+    function build_number(column::Expr, filter)::OptionalExpr
+        expression::OptionalExpr = missing
         optype = filter["type"]
         filtervalue = filter["filter"]
-        expression = "true"
 
         if filtervalue !== nothing
             if optype == "inRange"
                 filterto = filter["filterTo"]
                 # Only create a range expression if it is fully specified
                 if filterto !== nothing
-                    expression = "($filtervalue <= $column <= $filterto)"
+                    expression = :( ($filtervalue <= $column <= $filterto) )
                 end
             else
-                expression = "($column $(_mapnumberop[optype]) $filtervalue)"
+                expression = Expr(:call, mapop[optype],
+                                    column, filtervalue)
             end
         end
 
         return expression
     end
 
-    function build_text(column, filter)
+    function build_text(column::Expr, filter)::OptionalExpr
+        expression::OptionalExpr = missing
+
+        function regex_escape(s::AbstractString)
+            res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:])" => s"\\\1")
+            replace(res, "\0" => "\\0")
+        end
+
         # Unfortunately ag-grid's default text filter converts the user's input
         # to lowercase. Using regex with ignore case option rather normalizing
         # case on the field value. Thus we need to escape the user's input
-        filtervalue = _regex_escape(filter["filter"])
-
+        filtervalue = regex_escape(filter["filter"])
         optype = filter["type"]
-        expression = "true"
-
         if optype == "equals"
-            expression = "occursin(r\"\"\"^$filtervalue\$\"\"\"i, $column)"
+            matcher = Regex("^" * filtervalue * "\$", "i")
+            expression = :(occursin($matcher, $column))
         elseif optype == "notEqual"
-            expression = "!occursin(r\"\"\"^$filtervalue\$\"\"\"i, $column)"
+            matcher = Regex("^" * filtervalue * "\$", "i")
+            expression = :(!occursin($matcher, $column))
         elseif optype == "startsWith"
-            expression = "occursin(r\"\"\"^$filtervalue\"\"\"i, $column)"
+            matcher = Regex("^" * filtervalue, "i")
+            expression = :(occursin($matcher, $column))
         elseif optype == "endsWith"
-            expression = "occursin(r\"\"\"$filtervalue\$\"\"\"i, $column)"
+            matcher = Regex(filtervalue * "\$", "i")
+            expression = :(occursin($matcher, $column))
         elseif optype == "contains"
-            expression = "occursin(r\"\"\"$filtervalue\"\"\"i, $column)"
+            matcher = Regex(filtervalue, "i")
+            expression = :(occursin($matcher, $column))
         elseif optype == "notContains"
-            expression = "!occursin(r\"\"\"$filtervalue\"\"\"i, $column)"
+            matcher = Regex(filtervalue, "i")
+            expression = :(!occursin($matcher, $column))
         end
 
         return expression
     end
 
-    function build_date(column, filter)
-        optype = filter["type"]
+    function build_date(column::Expr, filter)::OptionalExpr
+        expression::OptionalExpr = missing
+
         filtervalue = filter["dateFrom"]
-        expression = "true"
-
         if filtervalue !== nothing
-            filtervalue = "Date$(Dates.yearmonthday(Date(filtervalue, _dateformat)))"
+            format = dateformat"y-m-d"
+            filtervalue = Date(filtervalue, format)
 
+            optype = filter["type"]
             if optype == "inRange"
                 filterto = filter["dateTo"]
                 # Only create a range expression if it is fully specified
                 if filterto !== nothing
-                    filterto = "Date$(Dates.yearmonthday(Date(filterto, _dateformat)))"
-                    expression = """($filtervalue <= $column <= $filterto)"""
+                    filterto = Date(filterto, format)
+                    expression = :( ($filtervalue <= $column <= $filterto) )
                 end
             else
-                expression = """($column $(_mapdateop[optype]) $filtervalue)"""
+                expression = Expr(:call, mapop[optype],
+                                    column, filtervalue)
             end
         end
 
         return expression
     end
 
-    function build_filter(column, filter)
-        filtertype = filter["filterType"]
-        expression = "true"
+    function build_filter(column::Expr, filter)::OptionalExpr
+        expression::OptionalExpr = missing
 
+        filtertype = filter["filterType"]
         if filtertype == "number"
             expression = build_number(column, filter)
         elseif filtertype == "text"
@@ -269,40 +270,45 @@ function _build_expressions(filtermodel)
         return expression
     end
 
-    function build_boolean(column, conditions)
-        return "(" *
-            build_filter(column, conditions["condition1"]) *
-                (conditions["operator"] == "OR" ? " || " : " && ") *
-            build_filter(column, conditions["condition2"]) *
-            ")"
+    function build_boolean(column::Expr, conditions)::OptionalExpr
+        expression::OptionalExpr = missing
+
+        expr1 = build_filter(column, conditions["condition1"])
+        expr2 = build_filter(column, conditions["condition2"])
+
+        if expr1 !== missing && expr2 !== missing
+            expression = conditions["operator"] == "OR" ?
+                :( ($expr1 || $expr2) ) :
+                :( ($expr1 && $expr2) )
+        elseif expr1 !== missing
+            expression = expr1
+        elseif expr2 !== missing
+            expression = expr2
+        end
+
+        return expression
     end
 
-    function column_access(column)
-        # Sanitize the column access. Even though column names
-        # are unlikely to inject code, raw strings do not interpolate.
-        # When using raw string, quote backslashes preceeding quotes first,
-        # then escape the quotes. This then roundtrips through
-        # parse/eval.
-        quoted = replace(replace(column, "\\\"" => "\\\\\""), "\"" => "\\\"")
-        return "getproperty(row, Symbol(raw\"\"\"$quoted\"\"\"))"
+    function column_access(column):Expr
+        return :( getproperty(row, Symbol($column)) )
     end
 
-    return [
+    return skipmissing([
         haskey(cond, "filterType") ?
             build_filter(column_access(col), cond) :
             build_boolean(column_access(col), cond)
-        for (col, cond) in filtermodel]
+        for (col, cond) in filtermodel])
 end
 
-const _filterfns = Dict{String, Any}()
+const _filterfns = Dict{Expr, Any}()
 
 function _filterfn(filtermodel)
-    code = "(row) -> begin $(join(_build_expressions(filtermodel), " && ")) end"
-    if haskey(_filterfns, code)
-        return _filterfns[code]
+    expression = :((row) -> $(Expr(:(&&), _build_expressions(filtermodel)...)))
+    if haskey(_filterfns, expression)
+        return _filterfns[expression]
     end
 
-    fltr = _filterfns[code] = eval(Meta.parse(code))
+    fltr = _filterfns[expression] = eval(expression)
     # On the first call, we need to wrap the function to invokelatest
     return (row) -> Base.invokelatest(fltr, row)
 end
