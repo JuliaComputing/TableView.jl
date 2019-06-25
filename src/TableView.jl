@@ -159,8 +159,6 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id,
     onimport(w, handler)
 end
 
-const OptionalExpr = Union{Missing, Expr}
-
 function _build_expressions(filtermodel)
     # Returns an iterator of Expr
 
@@ -173,8 +171,8 @@ function _build_expressions(filtermodel)
         "greaterThanOrEqual" => :(>=),
         )
 
-    function build_number(column::Expr, filter)::OptionalExpr
-        expression::OptionalExpr = missing
+    function build_number(column, filter)
+        expression = missing
         optype = filter["type"]
         filtervalue = filter["filter"]
 
@@ -194,8 +192,8 @@ function _build_expressions(filtermodel)
         return expression
     end
 
-    function build_text(column::Expr, filter)::OptionalExpr
-        expression::OptionalExpr = missing
+    function build_text(column, filter)
+        expression = missing
 
         function regex_escape(s::AbstractString)
             res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:])" => s"\\\1")
@@ -230,8 +228,8 @@ function _build_expressions(filtermodel)
         return expression
     end
 
-    function build_date(column::Expr, filter)::OptionalExpr
-        expression::OptionalExpr = missing
+    function build_date(column, filter)
+        expression = missing
 
         filtervalue = filter["dateFrom"]
         if filtervalue !== nothing
@@ -255,8 +253,8 @@ function _build_expressions(filtermodel)
         return expression
     end
 
-    function build_filter(column::Expr, filter)::OptionalExpr
-        expression::OptionalExpr = missing
+    function build_filter(column, filter)
+        expression = missing
 
         filtertype = filter["filterType"]
         if filtertype == "number"
@@ -270,8 +268,8 @@ function _build_expressions(filtermodel)
         return expression
     end
 
-    function build_boolean(column::Expr, conditions)::OptionalExpr
-        expression::OptionalExpr = missing
+    function build_boolean(column, conditions)
+        expression = missing
 
         expr1 = build_filter(column, conditions["condition1"])
         expr2 = build_filter(column, conditions["condition2"])
@@ -289,7 +287,7 @@ function _build_expressions(filtermodel)
         return expression
     end
 
-    function column_access(column):Expr
+    function column_access(column)
         return :( getproperty(row, Symbol($column)) )
     end
 
