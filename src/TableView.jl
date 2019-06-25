@@ -124,8 +124,9 @@ function showtable(table; dark = false, height = :auto, width = "100%", cell_cha
                 sortable = !async,
                 resizable = true,
                 type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
-                filter = async ? false : types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true
+                filter = types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true,
+                filterParams = async ? Dict("applyButton" => true, "clearButton" => true) : nothing
                ) for (i, n) in enumerate(names)]
 
     id = string("grid-", string(uuid1())[1:8])
@@ -158,6 +159,157 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id,
     onimport(w, handler)
 end
 
+function _build_expressions(filtermodel)
+    # Returns an iterator of Expr
+
+    mapop = Dict{String, Symbol}(
+        "equals" => :(==),
+        "notEqual" => :(!=),
+        "lessThan" => :(<),
+        "lessThanOrEqual" => :(<=),
+        "greaterThan" => :(>),
+        "greaterThanOrEqual" => :(>=),
+        )
+
+    function build_number(column, filter)
+        expression = missing
+        optype = filter["type"]
+        filtervalue = filter["filter"]
+
+        if filtervalue !== nothing
+            if optype == "inRange"
+                filterto = filter["filterTo"]
+                # Only create a range expression if it is fully specified
+                if filterto !== nothing
+                    expression = :( ($filtervalue <= $column <= $filterto) )
+                end
+            else
+                expression = Expr(:call, mapop[optype],
+                                    column, filtervalue)
+            end
+        end
+
+        return expression
+    end
+
+    function build_text(column, filter)
+        expression = missing
+
+        function regex_escape(s::AbstractString)
+            res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:])" => s"\\\1")
+            replace(res, "\0" => "\\0")
+        end
+
+        # Unfortunately ag-grid's default text filter converts the user's input
+        # to lowercase. Using regex with ignore case option rather normalizing
+        # case on the field value. Thus we need to escape the user's input
+        filtervalue = regex_escape(filter["filter"])
+        optype = filter["type"]
+        if optype == "equals"
+            matcher = Regex("^" * filtervalue * "\$", "i")
+            expression = :(occursin($matcher, $column))
+        elseif optype == "notEqual"
+            matcher = Regex("^" * filtervalue * "\$", "i")
+            expression = :(!occursin($matcher, $column))
+        elseif optype == "startsWith"
+            matcher = Regex("^" * filtervalue, "i")
+            expression = :(occursin($matcher, $column))
+        elseif optype == "endsWith"
+            matcher = Regex(filtervalue * "\$", "i")
+            expression = :(occursin($matcher, $column))
+        elseif optype == "contains"
+            matcher = Regex(filtervalue, "i")
+            expression = :(occursin($matcher, $column))
+        elseif optype == "notContains"
+            matcher = Regex(filtervalue, "i")
+            expression = :(!occursin($matcher, $column))
+        end
+
+        return expression
+    end
+
+    function build_date(column, filter)
+        expression = missing
+
+        filtervalue = filter["dateFrom"]
+        if filtervalue !== nothing
+            format = dateformat"y-m-d"
+            filtervalue = Date(filtervalue, format)
+
+            optype = filter["type"]
+            if optype == "inRange"
+                filterto = filter["dateTo"]
+                # Only create a range expression if it is fully specified
+                if filterto !== nothing
+                    filterto = Date(filterto, format)
+                    expression = :( ($filtervalue <= $column <= $filterto) )
+                end
+            else
+                expression = Expr(:call, mapop[optype],
+                                    column, filtervalue)
+            end
+        end
+
+        return expression
+    end
+
+    function build_filter(column, filter)
+        expression = missing
+
+        filtertype = filter["filterType"]
+        if filtertype == "number"
+            expression = build_number(column, filter)
+        elseif filtertype == "text"
+            expression = build_text(column, filter)
+        elseif filtertype == "date"
+            expression = build_date(column, filter)
+        end
+
+        return expression
+    end
+
+    function build_boolean(column, conditions)
+        expression = missing
+
+        expr1 = build_filter(column, conditions["condition1"])
+        expr2 = build_filter(column, conditions["condition2"])
+
+        if expr1 !== missing && expr2 !== missing
+            expression = conditions["operator"] == "OR" ?
+                :( ($expr1 || $expr2) ) :
+                :( ($expr1 && $expr2) )
+        elseif expr1 !== missing
+            expression = expr1
+        elseif expr2 !== missing
+            expression = expr2
+        end
+
+        return expression
+    end
+
+    function column_access(column)
+        return :( getproperty(row, Symbol($column)) )
+    end
+
+    return skipmissing([
+        haskey(cond, "filterType") ?
+            build_filter(column_access(col), cond) :
+            build_boolean(column_access(col), cond)
+        for (col, cond) in filtermodel])
+end
+
+const _filterfns = Dict{Expr, Any}()
+
+function _filterfn(filtermodel)
+    expression = :((row) -> $(Expr(:(&&), _build_expressions(filtermodel)...)))
+    if haskey(_filterfns, expression)
+        return _filterfns[expression]
+    end
+
+    fltr = _filterfns[expression] = eval(expression)
+    # On the first call, we need to wrap the function to invokelatest
+    return (row) -> Base.invokelatest(fltr, row)
+end
 
 function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
@@ -165,7 +317,10 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
                                                 "successCallback" => @js v -> nothing))
     requestedrows = Observable(w, "requestedrows", JSONText("{}"))
     on(rowparams) do x
-        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"], x["endRow"]]))
+        filtermodel = x["filterModel"]
+        data = length(filtermodel) > 0 ?
+            Base.Iterators.filter(_filterfn(filtermodel), rows) : rows
+        requestedrows[] = JSONText(table2json(data, names, types, requested = [x["startRow"], x["endRow"]]))
     end
 
     onjs(requestedrows, @js function (val)
