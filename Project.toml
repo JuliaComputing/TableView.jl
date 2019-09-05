@@ -1,6 +1,6 @@
 name = "TableView"
 uuid = "40c74d1a-b44c-5b06-a7c1-6cbea58ea978"
-version = "0.4.0"
+version = "0.4.1"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
