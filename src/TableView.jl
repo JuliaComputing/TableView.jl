@@ -165,7 +165,7 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
                                                 "successCallback" => @js v -> nothing))
     requestedrows = Observable(w, "requestedrows", JSONText("{}"))
     on(rowparams) do x
-        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"], x["endRow"]]))
+        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"] + 1, x["endRow"] + 1]))
     end
 
     onjs(requestedrows, @js function (val)
