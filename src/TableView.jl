@@ -58,7 +58,7 @@ Optional arguments:
                     user edits a table field. Note that all values will be strings, so you need to
                     do the necessary conversions yourself.
 """
-function showtable(table; dark = false, height = :auto, width = "100%", cell_changed = nothing)
+function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}(); dark = false, height = :auto, width = "100%", cell_changed = nothing)
     rows = Tables.rows(table)
     tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
 
@@ -128,6 +128,25 @@ function showtable(table; dark = false, height = :auto, width = "100%", cell_cha
                          types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true
                ) for (i, n) in enumerate(names)]
 
+    options[:onCellValueChanged] = onCellValueChanged
+    options[:columnDefs] = coldefs
+    options[:multiSortKey] = "ctrl"
+
+    for e in ["onCellClicked", "onCellDoubleClicked", "onRowClicked", "onCellFocused", "onCellKeyDown"]
+        o = Observable{Any}(w, e, nothing)
+        handler = @js function (ev)
+            @var x = Dict()
+            if ev.rowIndex !== undefined
+                x["rowIndex"] = ev.rowIndex + 1
+            end
+            if ev.colDef !== undefined
+                x["column"] = ev.colDef.headerName
+            end
+            $o[] = x
+        end
+        options[Symbol(e)] = handler
+    end
+
     id = string("grid-", string(uuid1())[1:8])
     w.dom = dom"div"(className = "ag-theme-balham$(dark ? "-dark" : "")",
                      style = Dict("width" => to_css_size(width),
@@ -136,19 +155,13 @@ function showtable(table; dark = false, height = :auto, width = "100%", cell_cha
 
     showfun = async ? _showtable_async! : _showtable_sync!
 
-    showfun(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
+    showfun(w, names, types, rows, coldefs, tablelength, id, options)
 
     w
 end
 
-function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
-    options = Dict(
-        :onCellValueChanged => onCellValueChanged,
-        :rowData => JSONText(table2json(rows, names, types)),
-        :columnDefs => coldefs,
-        :multiSortKey => "ctrl",
-    )
-
+function _showtable_sync!(w, names, types, rows, coldefs, tablelength, id, options)
+    options[:rowData] = JSONText(table2json(rows, names, types))
     handler = @js function (agGrid)
         @var gridOptions = $options
         @var el = document.getElementById($id)
@@ -159,7 +172,7 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, dark, id,
 end
 
 
-function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id, onCellValueChanged)
+function _showtable_async!(w, names, types, rows, coldefs, tablelength, id, options)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
@@ -172,22 +185,17 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, dark, id
         ($rowparams[]).successCallback(val, $(tablelength))
     end)
 
-    options = Dict(
-        :onCellValueChanged => onCellValueChanged,
-        :columnDefs => coldefs,
-        :maxConcurrentDatasourceRequests => 1,
-        :cacheBlockSize => 1000,
-        :maxBlocksInCache => 100,
-        :multiSortKey => "ctrl",
-        :rowModelType => "infinite",
-        :datasource => Dict(
-            "getRows" =>
-                @js function (rowParams)
-                    $rowparams[] = rowParams
-                end
-            ,
-            "rowCount" => tablelength
-        )
+    options[:maxConcurrentDatasourceRequests] = 1
+    options[:cacheBlockSize] = 1000
+    options[:maxBlocksInCache] = 100
+    options[:rowModelType] = "infinite"
+    options[:datasource] = Dict(
+        "getRows" =>
+            @js function (rowParams)
+                $rowparams[] = rowParams
+            end
+        ,
+        "rowCount" => tablelength
     )
 
     handler = @js function (agGrid)
