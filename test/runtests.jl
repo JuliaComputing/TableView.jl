@@ -21,9 +21,9 @@ end
 end
 @testset "inf and nan serializing" begin
     rows = Tables.table([NaN Inf -Inf 0])
-    names = [:a, :b, :c, :d, :e, :f]
-    types = [Float64 for _ in 1:6]
-    json = TableView.table2json(rows, names, types)
+    names = [:a, :b, :c, :d]
+    types = [Float64 for _ in 1:4]
+    json = TableView.table2json(Tables.Schema(names, types), rows, types)
     firstrow = JSON.parse(json)[1]
     @test firstrow["a"] == "NaN"
     @test firstrow["b"] == "Inf"
