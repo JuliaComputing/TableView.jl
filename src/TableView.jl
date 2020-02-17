@@ -155,13 +155,13 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}(); dark
 
     showfun = async ? _showtable_async! : _showtable_sync!
 
-    showfun(w, names, types, rows, coldefs, tablelength, id, options)
+    showfun(w, schema, names, types, rows, coldefs, tablelength, id, options)
 
     w
 end
 
-function _showtable_sync!(w, names, types, rows, coldefs, tablelength, id, options)
-    options[:rowData] = JSONText(table2json(rows, names, types))
+function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, id, options)
+    options[:rowData] = JSONText(table2json(schema, rows, types))
     handler = @js function (agGrid)
         @var gridOptions = $options
         @var el = document.getElementById($id)
@@ -171,14 +171,13 @@ function _showtable_sync!(w, names, types, rows, coldefs, tablelength, id, optio
     onimport(w, handler)
 end
 
-
-function _showtable_async!(w, names, types, rows, coldefs, tablelength, id, options)
+function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, id, options)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
     requestedrows = Observable(w, "requestedrows", JSONText("{}"))
     on(rowparams) do x
-        requestedrows[] = JSONText(table2json(rows, names, types, requested = [x["startRow"] + 1, x["endRow"] + 1]))
+        requestedrows[] = JSONText(table2json(schema, rows, types, requested = [x["startRow"] + 1, x["endRow"] + 1]))
     end
 
     onjs(requestedrows, @js function (val)
@@ -208,25 +207,23 @@ function _showtable_async!(w, names, types, rows, coldefs, tablelength, id, opti
 end
 
 # directly write JSON instead of allocating temporary dicts etc
-function table2json(rows, names, types; requested = nothing)
+function table2json(schema, rows, types; requested = nothing)
     io = IOBuffer()
     print(io, '[')
     for (i, row) in enumerate(rows)
         if requested == nothing || first(requested) <= i <= last(requested)
             print(io, '{')
-            i = 1
-            for col in Tables.eachcolumn(row)
-                JSON.print(io, names[i])
-                i += 1
+            Tables.eachcolumn(schema, row) do val, ind, name
+                JSON.print(io, name)
                 print(io, ':')
-                if col isa Number && isfinite(col)
-                    JSON.print(io, col)
-                elseif col === nothing
+                if val isa Number && isfinite(val)
+                    JSON.print(io, val)
+                elseif val === nothing
                     JSON.print(io, "nothing")
-                elseif col === missing
+                elseif val === missing
                     JSON.print(io, "missing")
                 else
-                    JSON.print(io, sprint(print, col))
+                    JSON.print(io, sprint(print, val))
                 end
                 print(io, ',')
             end
