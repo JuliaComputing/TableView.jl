@@ -52,13 +52,20 @@ Return a `WebIO.Scope` that displays the provided `table`.
 
 Optional arguments:
   - `dark`: Switch to a dark theme.
+  - `title`: Displayed above the table if non-empty;
   - `height`/`width`: CSS attributes specifying the output height and with.
   - `cell_changed`: Either `nothing` or a function that takes a single argument with the fields
                     `"new"`, `"old"`, `"row"`, and `"col"`. This function is called whenever the
                     user edits a table field. Note that all values will be strings, so you need to
                     do the necessary conversions yourself.
 """
-function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}(); dark = false, height = :auto, width = "100%", cell_changed = nothing)
+function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
+        dark::Bool = false,
+        title::String = "",
+        height = :auto,
+        width = "100%",
+        cell_changed = nothing
+    )
     rows = Tables.rows(table)
     tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
 
@@ -148,10 +155,23 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}(); dark
     end
 
     id = string("grid-", string(uuid1())[1:8])
-    w.dom = dom"div"(className = "ag-theme-balham$(dark ? "-dark" : "")",
+    w.dom = dom"div"(
+                dom"div"(
+                    title,
+                    style = Dict(
+                        "background-color" => dark ? "#1c1f20" : "#F5F7F7",
+                        "color" => dark ? "#F5F7F7" : "#1c1f20",
+                        "height" => isempty(title) ? "0" : "18px",
+                        "padding" => isempty(title) ? "0" : "5px",
+                        "font-family" => """-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif"""
+                    )
+                ),
+                dom"div"(className = "ag-theme-balham$(dark ? "-dark" : "")",
                      style = Dict("width" => to_css_size(width),
                                   "height" => to_css_size(height)),
-                     id = id)
+                     id = id
+                )
+            )
 
     showfun = async ? _showtable_async! : _showtable_sync!
 
