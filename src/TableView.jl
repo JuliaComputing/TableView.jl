@@ -14,6 +14,7 @@ function __init__()
     for f in ["ag-grid.js", "ag-grid.css", "ag-grid-light.css", "ag-grid-dark.css"]
         push!(ag_grid_imports, normpath(joinpath(@__DIR__, "..", "deps", "ag-grid-$(version)", f)))
     end
+    pushfirst!(ag_grid_imports, normpath(joinpath(@__DIR__, "rowNumberRenderer.js")))
 end
 
 to_css_size(s::AbstractString) = s
@@ -66,7 +67,7 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}(); dark
         height = 500
         if tablelength !== nothing
             # header + footer height ≈ 40px, 28px per row
-            height = min(40 + tablelength*28, height)
+            height = min(50 + tablelength*28, height)
         end
     end
 
@@ -116,17 +117,29 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}(); dark
         end
     end
 
-    coldefs = [(
-                headerName = n,
-                editable = cell_changed !== nothing,
-                headerTooltip = types[i],
-                field = n,
-                sortable = !async,
-                resizable = true,
-                type = types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
-                filter = async ? false : types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
-                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true
+    coldefs = [Dict(
+                :headerName => string(n),
+                :editable => cell_changed !== nothing,
+                :headerTooltip => string(types[i]),
+                :field => string(n),
+                :sortable => !async,
+                :resizable => true,
+                :type => types[i] <: Union{Missing, T where T <: Number} ? "numericColumn" : nothing,
+                :filter => async ? false : types[i] <: Union{Missing, T where T <: Dates.Date} ? "agDateColumnFilter" :
+                         types[i] <: Union{Missing, T where T <: Number} ? "agNumberColumnFilter" : true,
                ) for (i, n) in enumerate(names)]
+
+    pushfirst!(coldefs, Dict(
+        :headerName => "Row",
+        :editable => false,
+        :headerTooltip => "",
+        :field => "__row__",
+        :sortable => !async,
+        :resizable => true,
+        :type => "numericColumn",
+        :cellRenderer => "rowNumberRenderer",
+        :filter => false
+    ))
 
     options[:onCellValueChanged] = onCellValueChanged
     options[:columnDefs] = coldefs
@@ -162,10 +175,15 @@ end
 
 function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, id, options)
     options[:rowData] = JSONText(table2json(schema, rows, types))
-    handler = @js function (agGrid)
+    handler = @js function (RowNumberRenderer, agGrid)
         @var gridOptions = $options
         @var el = document.getElementById($id)
+        gridOptions.components = Dict(
+            "rowNumberRenderer" => RowNumberRenderer
+        )
         this.table = @new agGrid.Grid(el, gridOptions)
+        
+        gridOptions.columnApi.autoSizeColumn("__row__")
         gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
@@ -197,10 +215,16 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         "rowCount" => tablelength
     )
 
-    handler = @js function (agGrid)
+    handler = @js function (RowNumberRenderer, agGrid)
         @var gridOptions = $options
         @var el = document.getElementById($id)
+
+        gridOptions.components = Dict(
+            "rowNumberRenderer" => RowNumberRenderer
+        )
+
         this.table = @new agGrid.Grid(el, gridOptions)
+        gridOptions.columnApi.autoSizeColumn("__row__")
         gridOptions.columnApi.autoSizeColumns($names)
     end
     onimport(w, handler)
