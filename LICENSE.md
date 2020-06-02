@@ -1,6 +1,6 @@
 The TableView.jl package is licensed under the MIT "Expat" License:
 
-> Copyright (c) 2017: Shashi Gowda.
+> Copyright (c) 2017: Shashi Gowda. 2018-current: Julia Computing Inc.
 > 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal
