@@ -263,9 +263,9 @@ function table2json(schema, rows, types; requested = nothing)
                 if val isa Number && isfinite(val)
                     JSON.print(io, val)
                 elseif val === nothing
-                    JSON.print(io, "nothing")
+                    JSON.print(io, repr(nothing))
                 elseif val === missing
-                    JSON.print(io, "missing")
+                    JSON.print(io, repr(missing))
                 else
                     JSON.print(io, sprint(print, val))
                 end
