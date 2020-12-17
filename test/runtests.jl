@@ -20,7 +20,8 @@ end
     @test showtable(nttable) isa WebIO.Scope
 end
 @testset "inf and nan serializing" begin
-    rows = Tables.table([NaN Inf -Inf 0 missing nothing])
+    fields = Array{Union{Missing, Nothing, Float64}}(NaN Inf -Inf 0 missing nothing)
+    rows = Tables.table(fields)
     names = [:a, :b, :c, :d, :e, :f]
     types = vcat([Float64 for _ in 1:4], [Missing, Nothing])
     Base.show(io::IO, x::Missing) = print(io, "test_missing")
