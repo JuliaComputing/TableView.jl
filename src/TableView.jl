@@ -202,9 +202,7 @@ function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, i
             "rowNumberRenderer" => RowNumberRenderer
         )
         this.table = @new agGrid.Grid(el, gridOptions)
-        
-        gridOptions.columnApi.autoSizeColumn("__row__")
-        gridOptions.columnApi.autoSizeColumns($names)
+        gridOptions.columnApi.autoSizeAllColumns()
     end
     onimport(w, handler)
 end
@@ -242,10 +240,8 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         gridOptions.components = Dict(
             "rowNumberRenderer" => RowNumberRenderer
         )
-
         this.table = @new agGrid.Grid(el, gridOptions)
-        gridOptions.columnApi.autoSizeColumn("__row__")
-        gridOptions.columnApi.autoSizeColumns($names)
+        gridOptions.columnApi.autoSizeAllColumns()
     end
     onimport(w, handler)
 end
