@@ -69,7 +69,7 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
     )
     rows = Tables.rows(table)
     it_sz = Base.IteratorSize(rows)
-    has_len = it_sz == Base.HasLength() || it_sz == Base.HasShape{1}()
+    has_len = it_sz isa Base.HasLength || it_sz isa Base.HasShape
     tablelength = has_len ? length(rows) : nothing
 
     if height === :auto
