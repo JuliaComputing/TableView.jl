@@ -68,7 +68,9 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
         cell_changed = nothing
     )
     rows = Tables.rows(table)
-    tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
+    it_sz = Base.IteratorSize(rows)
+    has_len = it_sz == Base.HasLength() || it_sz == Base.HasShape{1}()
+    tablelength = has_len ? length(rows) : nothing
 
     if height === :auto
         height = 500
