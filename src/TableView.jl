@@ -92,6 +92,7 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
                 push!(names, nm)
                 push!(types, typeof(getproperty(row, nm)))
             end
+            schema = Tables.Schema(names, types)
         else
             # no schema and no rows
         end
