@@ -68,7 +68,9 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
         cell_changed = nothing
     )
     rows = Tables.rows(table)
-    tablelength = Base.IteratorSize(rows) == Base.HasLength() ? length(rows) : nothing
+    it_sz = Base.IteratorSize(rows)
+    has_len = it_sz isa Base.HasLength || it_sz isa Base.HasShape
+    tablelength = has_len ? length(rows) : nothing
 
     if height === :auto
         height = 500
@@ -90,6 +92,7 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
                 push!(names, nm)
                 push!(types, typeof(getproperty(row, nm)))
             end
+            schema = Tables.Schema(names, types)
         else
             # no schema and no rows
         end
@@ -202,9 +205,7 @@ function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, i
             "rowNumberRenderer" => RowNumberRenderer
         )
         this.table = @new agGrid.Grid(el, gridOptions)
-        
-        gridOptions.columnApi.autoSizeColumn("__row__")
-        gridOptions.columnApi.autoSizeColumns($names)
+        gridOptions.columnApi.autoSizeAllColumns()
     end
     onimport(w, handler)
 end
@@ -242,10 +243,8 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         gridOptions.components = Dict(
             "rowNumberRenderer" => RowNumberRenderer
         )
-
         this.table = @new agGrid.Grid(el, gridOptions)
-        gridOptions.columnApi.autoSizeColumn("__row__")
-        gridOptions.columnApi.autoSizeColumns($names)
+        gridOptions.columnApi.autoSizeAllColumns()
     end
     onimport(w, handler)
 end
