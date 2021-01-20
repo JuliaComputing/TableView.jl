@@ -266,6 +266,8 @@ function table2json(schema, rows, types; requested = nothing)
         Tables.eachcolumn(schema, row) do val, ind, name
             if val isa Number && isfinite(val) && -js_max_safe_int < val < js_max_safe_int
                 JSON.show_pair(columnwriter, ser, name, val)
+            elseif val == nothing || val == missing
+                JSON.show_pair(columnwriter, ser, name, repr(val))
             else
                 JSON.show_pair(columnwriter, ser, name, sprint(print, val))
             end
