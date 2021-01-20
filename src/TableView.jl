@@ -7,6 +7,7 @@ using Observables: @map
 export showtable
 
 const ag_grid_imports = []
+const js_max_safe_int = 2^53-1
 
 function __init__()
     version = readchomp(joinpath(@__DIR__, "..", "ag-grid.version"))
@@ -252,32 +253,26 @@ end
 # directly write JSON instead of allocating temporary dicts etc
 function table2json(schema, rows, types; requested = nothing)
     io = IOBuffer()
-    print(io, '[')
+    rowwriter = JSON.Writer.CompactContext(io)
+    JSON.begin_array(rowwriter)
+    ser = JSON.StandardSerialization()
     for (i, row) in enumerate(rows)
-        if requested == nothing || first(requested) <= i <= last(requested)
-            print(io, '{')
-            Tables.eachcolumn(schema, row) do val, ind, name
-                JSON.print(io, name)
-                print(io, ':')
-                if val isa Number && isfinite(val)
-                    JSON.print(io, val)
-                elseif val === nothing
-                    JSON.print(io, repr(nothing))
-                elseif val === missing
-                    JSON.print(io, repr(missing))
-                else
-                    JSON.print(io, sprint(print, val))
-                end
-                print(io, ',')
-            end
-            skip(io, -1)
-            print(io, '}')
-            print(io, ',')
+        if requested != nothing && (i < first(requested) || i > last(requested))
+            continue
         end
+        JSON.delimit(rowwriter)
+        columnwriter = JSON.Writer.CompactContext(io)
+        JSON.begin_object(columnwriter)
+        Tables.eachcolumn(schema, row) do val, ind, name
+            if val isa Number && isfinite(val) && -js_max_safe_int < val < js_max_safe_int
+                JSON.show_pair(columnwriter, ser, name, val)
+            else
+                JSON.show_pair(columnwriter, ser, name, repr(MIME("text/plain"), val))
+            end
+        end
+        JSON.end_object(columnwriter)
     end
-    skip(io, -1)
-    print(io, ']')
-
+    JSON.end_array(rowwriter)
     String(take!(io))
 end
 end
