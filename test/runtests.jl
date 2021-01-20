@@ -32,6 +32,16 @@ end
     @test firstrow["d"] == 0
     @test firstrow["e"] == "test_missing"
 end
+@testset "large integers" begin
+    rows = Tables.table([2^52 2^53 2^54])
+    names = [:a, :b, :c]
+    types = [Int64 for _ in 1:3]
+    json = TableView.table2json(Tables.Schema(names, types), rows, types)
+    firstrow = JSON.parse(json)[1]
+    @test firstrow["a"] == 4503599627370496
+    @test firstrow["b"] == "9007199254740992"
+    @test firstrow["c"] == "18014398509481984"
+end
 @testset "normal array" begin
     array = rand(10, 10)
     @test showtable(array) isa WebIO.Scope
