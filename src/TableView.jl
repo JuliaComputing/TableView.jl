@@ -7,7 +7,7 @@ using Observables: @map
 export showtable
 
 const ag_grid_imports = []
-const js_max_safe_int = 2^53-1
+const js_max_safe_int = Int128(2^53-1)
 
 function __init__()
     version = readchomp(joinpath(@__DIR__, "..", "ag-grid.version"))
@@ -264,7 +264,7 @@ function table2json(schema, rows, types; requested = nothing)
         columnwriter = JSON.Writer.CompactContext(io)
         JSON.begin_object(columnwriter)
         Tables.eachcolumn(schema, row) do val, ind, name
-            if val isa Number && isfinite(val) && -js_max_safe_int < val < js_max_safe_int
+            if val isa Real && isfinite(val) && -js_max_safe_int < val < js_max_safe_int
                 JSON.show_pair(columnwriter, ser, name, val)
             elseif val === nothing || val === missing
                 JSON.show_pair(columnwriter, ser, name, repr(val))
