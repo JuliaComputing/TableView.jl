@@ -264,7 +264,7 @@ function table2json(schema, rows, types; requested = nothing)
         columnwriter = JSON.Writer.CompactContext(io)
         JSON.begin_object(columnwriter)
         Tables.eachcolumn(schema, row) do val, ind, name
-            if val isa Real && isfinite(val) && -js_max_safe_int < val < js_max_safe_int
+            if val isa Real && isfinite(val) && -js_max_safe_int < trunc(Int128, val) < js_max_safe_int
                 JSON.show_pair(columnwriter, ser, name, val)
             elseif val === nothing || val === missing
                 JSON.show_pair(columnwriter, ser, name, repr(val))
