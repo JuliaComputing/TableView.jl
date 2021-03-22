@@ -205,6 +205,9 @@ function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, i
         gridOptions.components = Dict(
             "rowNumberRenderer" => RowNumberRenderer
         )
+        if $(haskey(ENV, "AG_GRID_LICENSE_KEY"))
+            agGrid.LicenseManager.setLicenseKey($(ENV["AG_GRID_LICENSE_KEY"]))
+        end
         this.table = @new agGrid.Grid(el, gridOptions)
         gridOptions.columnApi.autoSizeAllColumns()
     end
@@ -244,6 +247,9 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         gridOptions.components = Dict(
             "rowNumberRenderer" => RowNumberRenderer
         )
+        if $(haskey(ENV, "AG_GRID_LICENSE_KEY"))
+            agGrid.LicenseManager.setLicenseKey($(ENV["AG_GRID_LICENSE_KEY"]))
+        end
         this.table = @new agGrid.Grid(el, gridOptions)
         gridOptions.columnApi.autoSizeAllColumns()
     end
