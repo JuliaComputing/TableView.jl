@@ -155,6 +155,7 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
     options[:onCellValueChanged] = onCellValueChanged
     options[:columnDefs] = coldefs
     options[:multiSortKey] = "ctrl"
+    options[:rowSelection] = "multiple"
 
     for e in ["onCellClicked", "onCellDoubleClicked", "onRowClicked", "onCellFocused", "onCellKeyDown"]
         o = Observable{Any}(w, e, nothing)
