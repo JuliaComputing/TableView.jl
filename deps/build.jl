@@ -1,5 +1,6 @@
 version = readchomp(joinpath(@__DIR__, "..", "ag-grid.version"))
 distribution = haskey(ENV, "AG_GRID_LICENSE_KEY") ? "enterprise" : "community"
+println("building: distribution=$distribution version=$version")
 
 isdir(joinpath(@__DIR__, "ag-grid-$(version)")) || mkdir(joinpath(@__DIR__, "ag-grid-$(version)"))
 

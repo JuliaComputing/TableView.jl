@@ -199,14 +199,15 @@ end
 
 function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, id, options)
     options[:rowData] = JSONText(table2json(schema, rows, types))
+    license = get(ENV, "AG_GRID_LICENSE_KEY", nothing)
     handler = @js function (RowNumberRenderer, agGrid)
         @var gridOptions = $options
         @var el = document.getElementById($id)
         gridOptions.components = Dict(
             "rowNumberRenderer" => RowNumberRenderer
         )
-        if $(haskey(ENV, "AG_GRID_LICENSE_KEY"))
-            agGrid.LicenseManager.setLicenseKey($(ENV["AG_GRID_LICENSE_KEY"]))
+        if $(!isnothing(license))
+            agGrid.LicenseManager.setLicenseKey($license)
         end
         this.table = @new agGrid.Grid(el, gridOptions)
         gridOptions.columnApi.autoSizeAllColumns()
@@ -239,6 +240,7 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         ,
         "rowCount" => tablelength
     )
+    license = get(ENV, "AG_GRID_LICENSE_KEY", nothing)
 
     handler = @js function (RowNumberRenderer, agGrid)
         @var gridOptions = $options
@@ -247,8 +249,8 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         gridOptions.components = Dict(
             "rowNumberRenderer" => RowNumberRenderer
         )
-        if $(haskey(ENV, "AG_GRID_LICENSE_KEY"))
-            agGrid.LicenseManager.setLicenseKey($(ENV["AG_GRID_LICENSE_KEY"]))
+        if $(!isnothing(license))
+            agGrid.LicenseManager.setLicenseKey($license)
         end
         this.table = @new agGrid.Grid(el, gridOptions)
         gridOptions.columnApi.autoSizeAllColumns()
