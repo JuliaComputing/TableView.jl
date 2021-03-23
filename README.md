@@ -13,4 +13,4 @@ TableView.jl is an [ag-grid](https://www.ag-grid.com/) based table viewer built 
 When trying to display big tables (>10k rows) we switch to lazy-loading additional rows while scrolling, which disables the filtering/sorting that's possible for smaller datasets. It's possible (but not trivial) to write proper backend support for those operations -- PRs would be very welcome.
 
 ### ag-grid Enterprise
-Setting the `AG_GRID_LICENSE_KEY` at build *and* run time will use the enterprise distribution instead of the normal community distribution.
+Setting the `AG_GRID_LICENSE_KEY` environment variable at build *and* run time will use the enterprise distribution instead of the normal community distribution.
