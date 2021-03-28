@@ -7,7 +7,6 @@ using Observables: @map
 export showtable
 
 const ag_grid_imports = []
-const js_max_safe_int = Int128(2^53-1)
 
 function __init__()
     version = readchomp(joinpath(@__DIR__, "..", "ag-grid.version"))
@@ -259,6 +258,14 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
     onimport(w, handler)
 end
 
+function _is_javascript_safe(x::Integer)
+    -Int128(2^53)-1 < x < Int128(2^53)-1
+end
+
+function _is_javascript_safe(x::AbstractFloat)
+    -2^53-1 < x < 2^53-1
+end
+
 # directly write JSON instead of allocating temporary dicts etc
 function table2json(schema, rows, types; requested = nothing)
     io = IOBuffer()
@@ -273,7 +280,7 @@ function table2json(schema, rows, types; requested = nothing)
         columnwriter = JSON.Writer.CompactContext(io)
         JSON.begin_object(columnwriter)
         Tables.eachcolumn(schema, row) do val, ind, name
-            if val isa Real && isfinite(val) && -js_max_safe_int < trunc(Int128, val) < js_max_safe_int
+            if val isa Real && isfinite(val) && _is_javascript_safe(val)
                 JSON.show_pair(columnwriter, ser, name, val)
             elseif val === nothing || val === missing
                 JSON.show_pair(columnwriter, ser, name, repr(val))

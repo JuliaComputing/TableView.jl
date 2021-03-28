@@ -42,6 +42,15 @@ end
     @test firstrow["b"] == "9007199254740992"
     @test firstrow["c"] == "18014398509481984"
 end
+@testset "large floats" begin
+    rows = Tables.table([1.0e50 1.0e100])
+    names = [:a, :b]
+    types = [Float64, Float64]
+    json = TableView.table2json(Tables.Schema(names, types), rows, types)
+    firstrow = JSON.parse(json)[1]
+    @test firstrow["a"] == "1.0e50"
+    @test firstrow["b"] == "1.0e100"
+end
 @testset "normal array" begin
     array = rand(10, 10)
     @test showtable(array) isa WebIO.Scope
