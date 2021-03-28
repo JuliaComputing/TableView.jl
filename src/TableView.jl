@@ -258,8 +258,17 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
     onimport(w, handler)
 end
 
-_is_javascript_safe(x::Integer) = -(Int64(2)^53-1) < x < Int64(2)^53-1
-_is_javascript_safe(x::AbstractFloat) = -(Float64(2)^53-1) < x < Float64(2)^53-1
+function _is_javascript_safe(x::Integer)
+    min_safe_int = -(Int64(2)^53-1)
+    max_safe_int = Int64(2)^53-1
+    min_safe_int < x < max_safe_int
+end
+
+function _is_javascript_safe(x::AbstractFloat)
+    min_safe_float = -(Float64(2)^53-1)
+    max_safe_float = Float64(2)^53-1
+    min_safe_float < x < max_safe_float
+end
 
 # directly write JSON instead of allocating temporary dicts etc
 function table2json(schema, rows, types; requested = nothing)
