@@ -259,11 +259,11 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
 end
 
 function _is_javascript_safe(x::Integer)
-    -Int128(2^53)-1 < x < Int128(2^53)-1
+    -(Int64(2)^53-1) < x < Int64(2)^53-1
 end
 
 function _is_javascript_safe(x::AbstractFloat)
-    -2^53-1 < x < 2^53-1
+    -(Float64(2)^53-1) < x < Float64(2)^53-1
 end
 
 # directly write JSON instead of allocating temporary dicts etc
