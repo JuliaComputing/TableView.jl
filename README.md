@@ -1,6 +1,6 @@
 # TableView
 
-[![Build Status](https://travis-ci.org/JuliaComputing/TableView.jl.svg?branch=master)](https://travis-ci.org/JuliaComputing/TableView.jl)
+[![CI](https://github.com/JuliaComputing/TableView.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/JuliaComputing/TableView.jl/actions/workflows/CI.yml)
 
 TableView.jl is an [ag-grid](https://www.ag-grid.com/) based table viewer built on [WebIO.jl](https://github.com/JuliaGizmos/WebIO.jl). It can display arbitrarily large tables by lazy-loading additional data when scrolling (this is the default for datasets with more than 10k rows).
 
