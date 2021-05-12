@@ -47,20 +47,28 @@ end
 showtable(table::AbstractMatrix; kwargs...) = showtable(Tables.table(table); kwargs...)
 
 """
-    showtable(table; dark = false, height = :auto, width = "100%", cell_changed = nothing)
+    showtable(table; options::Dict{Symbol, Any} = Dict{Symbol, Any}(), option_mutator! = identity,
+              dark = false, height = :auto, width = "100%", cell_changed = nothing)
 
 Return a `WebIO.Scope` that displays the provided `table`.
 
 Optional arguments:
-  - `dark`: Switch to a dark theme.
-  - `title`: Displayed above the table if non-empty;
-  - `height`/`width`: CSS attributes specifying the output height and with.
-  - `cell_changed`: Either `nothing` or a function that takes a single argument with the fields
-                    `"new"`, `"old"`, `"row"`, and `"col"`. This function is called whenever the
-                    user edits a table field. Note that all values will be strings, so you need to
-                    do the necessary conversions yourself.
+    - `options`: Directly passed to agGrid's `Grid` constructor. Refer to the
+                 [documentation](https://www.ag-grid.com/documentation/) for more info.
+    - `options_mutator!`: Runs on the `options` dictionary populated by TableView and allows for
+                          customizing the grid (at your own risk -- you can break the package by
+                          supplying invalid options).
+    - `dark`: Switch to a dark theme.
+    - `title`: Displayed above the table if non-empty;
+    - `height`/`width`: CSS attributes specifying the output height and with.
+    - `cell_changed`: Either `nothing` or a function that takes a single argument with the fields
+                      `"new"`, `"old"`, `"row"`, and `"col"`. This function is called whenever the
+                      user edits a table field. Note that all values will be strings, so you need to
+                      do the necessary conversions yourself.
 """
-function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
+function showtable(table;
+        options::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+        option_mutator! = identity,
         dark::Bool = false,
         title::String = "",
         height = :auto,
@@ -190,19 +198,20 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
                 )
             )
 
-    # allow a user to modify some of the table settings using a call back function supplied in the options argument            
-    # we need to remove the callback function key from options as it cause the JS serilization process to fail
-    haskey(options, :userCallbackFunc) && ((options[:userCallbackFunc])(options) ; delete!(options, :userCallbackFunc))
-    
+
+
     showfun = async ? _showtable_async! : _showtable_sync!
 
-    showfun(w, schema, names, types, rows, coldefs, tablelength, id, options)
+    showfun(w, schema, types, rows, tablelength, id, options, option_mutator!)
 
-    w
+    return w
 end
 
-function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, id, options)
+function _showtable_sync!(w, schema, types, rows, tablelength, id, options, option_mutator!)
     options[:rowData] = JSONText(table2json(schema, rows, types))
+
+    option_mutator!(options)
+
     license = get(ENV, "AG_GRID_LICENSE_KEY", nothing)
     handler = @js function (RowNumberRenderer, agGrid)
         @var gridOptions = $options
@@ -219,7 +228,7 @@ function _showtable_sync!(w, schema, names, types, rows, coldefs, tablelength, i
     onimport(w, handler)
 end
 
-function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, id, options)
+function _showtable_async!(w, schema, types, rows, tablelength, id, options, option_mutator!)
     rowparams = Observable(w, "rowparams", Dict("startRow" => 1,
                                                 "endRow" => 100,
                                                 "successCallback" => @js v -> nothing))
@@ -245,6 +254,8 @@ function _showtable_async!(w, schema, names, types, rows, coldefs, tablelength, 
         "rowCount" => tablelength
     )
     license = get(ENV, "AG_GRID_LICENSE_KEY", nothing)
+
+    option_mutator!(options)
 
     handler = @js function (RowNumberRenderer, agGrid)
         @var gridOptions = $options
