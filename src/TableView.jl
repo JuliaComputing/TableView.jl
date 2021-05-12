@@ -190,6 +190,10 @@ function showtable(table, options::Dict{Symbol, Any} = Dict{Symbol, Any}();
                 )
             )
 
+    # allow a user to modify some of the table settings using a call back function supplied in the options argument            
+    # we need to remove the callback function key from options as it cause the JS serilization process to fail
+    haskey(options, :userCallbackFunc) && ((options[:userCallbackFunc])(options) ; delete!(options, :userCallbackFunc))
+    
     showfun = async ? _showtable_async! : _showtable_sync!
 
     showfun(w, schema, names, types, rows, coldefs, tablelength, id, options)
