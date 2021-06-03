@@ -274,6 +274,10 @@ function _showtable_async!(w, schema, types, rows, tablelength, id, options, opt
     onimport(w, handler)
 end
 
+function _is_javascript_safe(x)
+    false
+end
+
 function _is_javascript_safe(x::Integer)
     min_safe_int = -(Int64(2)^53-1)
     max_safe_int = Int64(2)^53-1
