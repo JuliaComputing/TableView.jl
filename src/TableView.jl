@@ -274,9 +274,8 @@ function _showtable_async!(w, schema, types, rows, tablelength, id, options, opt
     onimport(w, handler)
 end
 
-function _is_javascript_safe(x)
-    false
-end
+# By default all objects must use repr or sprint
+_is_javascript_safe(x::Real) = false
 
 function _is_javascript_safe(x::Integer)
     min_safe_int = -(Int64(2)^53-1)
