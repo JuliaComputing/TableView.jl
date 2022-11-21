@@ -20,11 +20,12 @@ end
     @test showtable(nttable) isa WebIO.Scope
 end
 @testset "inf, nan, and missing serializing" begin
-    rows = Tables.table([NaN Inf -Inf 0 missing])
     names = [:a, :b, :c, :d, :e]
+    rows = Tables.table([NaN Inf -Inf 0 missing]; header=names)
     types = vcat([Float64 for _ in 1:4], [Missing])
     Base.show(io::IO, x::Missing) = print(io, "test_missing")
-    json = TableView.table2json(Tables.Schema(names, types), rows, types)
+    schema = Tables.Schema(names, types)
+    json = TableView.table2json(schema, Tables.rows(rows), types)
     firstrow = JSON.parse(json)[1]
     @test firstrow["a"] == "NaN"
     @test firstrow["b"] == "Inf"
@@ -33,20 +34,22 @@ end
     @test firstrow["e"] == "test_missing"
 end
 @testset "large integers" begin
-    rows = Tables.table([2^52 2^53 2^54])
     names = [:a, :b, :c]
+    rows = Tables.table([2^52 2^53 2^54]; header=names)
     types = [Int64 for _ in 1:3]
-    json = TableView.table2json(Tables.Schema(names, types), rows, types)
+    schema = Tables.Schema(names, types)
+    json = TableView.table2json(schema, Tables.rows(rows), types)
     firstrow = JSON.parse(json)[1]
     @test firstrow["a"] == 4503599627370496
     @test firstrow["b"] == "9007199254740992"
     @test firstrow["c"] == "18014398509481984"
 end
 @testset "large floats" begin
-    rows = Tables.table([1.0e50 1.0e100])
     names = [:a, :b]
+    rows = Tables.table([1.0e50 1.0e100]; header=names)
     types = [Float64, Float64]
-    json = TableView.table2json(Tables.Schema(names, types), rows, types)
+    schema = Tables.Schema(names, types)
+    json = TableView.table2json(schema, Tables.rows(rows), types)
     firstrow = JSON.parse(json)[1]
     @test firstrow["a"] == "1.0e50"
     @test firstrow["b"] == "1.0e100"
