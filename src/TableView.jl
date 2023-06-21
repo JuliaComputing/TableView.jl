@@ -74,7 +74,8 @@ function showtable(table;
         title::String = "",
         height = :auto,
         width = "100%",
-        cell_changed = nothing
+        cell_changed = nothing,
+        async_threshold = 10_000,
     )
     rows = Tables.rows(table)
     it_sz = Base.IteratorSize(rows)
@@ -110,7 +111,7 @@ function showtable(table;
         types = schema.types
     end
 
-    async = tablelength === nothing || tablelength > 10_000
+    async = tablelength === nothing || tablelength > async_threshold
 
     w = Scope(imports = ag_grid_imports)
 
