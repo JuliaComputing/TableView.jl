@@ -11,7 +11,7 @@ const ag_grid_imports = []
 function __init__()
     version = readchomp(joinpath(@__DIR__, "..", "ag-grid.version"))
     empty!(ag_grid_imports)
-    for f in ["ag-grid.js", "ag-grid.css", "ag-grid-light.css", "ag-grid-dark.css"]
+    for f in ["ag-grid.js", "ag-grid.css", "ag-theme-balham.css"]
         push!(ag_grid_imports, normpath(joinpath(@__DIR__, "..", "deps", "ag-grid-$(version)", f)))
     end
     pushfirst!(ag_grid_imports, normpath(joinpath(@__DIR__, "rowNumberRenderer.js")))
